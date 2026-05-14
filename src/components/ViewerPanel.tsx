@@ -16,7 +16,7 @@ type ViewerPanelProps = {
   onDropFile: (file: File) => void;
 };
 
-const VIEW_SCALE_PRESETS = [0.2, 0.5, 0.8, 1, 1.2, 1.5, 2];
+const VIEW_SCALE_PRESETS = [0.2, 0.5, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4];
 
 export function ViewerPanel({ runtime, meshCount, selectedName, viewScale, displayMode, onDisplayModeChange, onResetView, onRotateSelection, onViewScaleChange, onDropFile }: ViewerPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -153,7 +153,7 @@ export function ViewerPanel({ runtime, meshCount, selectedName, viewScale, displ
 
 function clampViewScale(value: number): number {
   if (!Number.isFinite(value)) return 1;
-  return Math.min(2, Math.max(0.2, value));
+  return Math.min(4, Math.max(0.2, value));
 }
 
 function presetValue(scale: number): number | undefined {
@@ -166,7 +166,7 @@ function scaleToSliderValue(scale: number): number {
   if (clampedScale <= 1) {
     return Math.round(((clampedScale - 0.2) / 0.8) * 50);
   }
-  return Math.round(50 + ((clampedScale - 1) / 1) * 50);
+  return Math.round(50 + ((clampedScale - 1) / 3) * 50);
 }
 
 function sliderValueToScale(value: number): number {
@@ -174,7 +174,7 @@ function sliderValueToScale(value: number): number {
   if (sliderValue <= 50) {
     return roundScale(0.2 + (sliderValue / 50) * 0.8);
   }
-  return roundScale(1 + ((sliderValue - 50) / 50) * 1);
+  return roundScale(1 + ((sliderValue - 50) / 50) * 3);
 }
 
 function roundScale(scale: number): number {

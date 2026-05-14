@@ -154,19 +154,19 @@ try {
     }
     const scaleOptionLabels = [...viewScaleSelect.options].map((option) => option.textContent?.trim());
     const initialScaleMidpoint = viewScaleSlider.value === '50' && viewScaleSelect.value === '1' && viewScaleSelect.selectedOptions[0]?.textContent === '100%';
-    const scaleRangeBounded = scaleOptionLabels.includes('20%') && scaleOptionLabels.includes('200%') && !scaleOptionLabels.includes('300%') && !scaleOptionLabels.includes('400%');
+    const scaleRangeBounded = scaleOptionLabels.includes('20%') && scaleOptionLabels.includes('200%') && scaleOptionLabels.includes('250%') && scaleOptionLabels.includes('300%') && scaleOptionLabels.includes('400%');
 
     const rangeValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
     rangeValueSetter?.call(viewScaleSlider, '73');
     viewScaleSlider.dispatchEvent(new Event('input', { bubbles: true }));
     viewScaleSlider.dispatchEvent(new Event('change', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 80));
-    const customScaleUpdatesNumber = viewScaleSelect.selectedOptions[0]?.textContent === '146%' && viewScaleSlider.value === '73';
+    const customScaleUpdatesNumber = viewScaleSelect.selectedOptions[0]?.textContent === '238%' && viewScaleSlider.value === '73';
 
-    viewScaleSelect.value = '2';
+    viewScaleSelect.value = '4';
     viewScaleSelect.dispatchEvent(new Event('change', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 80));
-    const hasViewScaleStatus = viewScaleSelect.value === '2' && viewScaleSelect.selectedOptions[0]?.textContent === '200%' && viewScaleSlider.value === '100';
+    const hasViewScaleStatus = viewScaleSelect.value === '4' && viewScaleSelect.selectedOptions[0]?.textContent === '400%' && viewScaleSlider.value === '100';
     const viewScaleSkippedTimeline = !timelineDetails().includes('150%');
     const viewScaleInViewport = Boolean(document.querySelector('.viewer-panel .view-scale-control'));
     const viewScaleInInspector = Boolean(document.querySelector('.right-panel input[aria-label="视图比例"]'));

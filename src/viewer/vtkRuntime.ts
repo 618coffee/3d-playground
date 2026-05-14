@@ -279,7 +279,7 @@ export function createVtkRuntime(): VtkRuntime {
 
 function clampViewScale(scale: number): number {
   if (!Number.isFinite(scale)) return 1;
-  return Math.min(2, Math.max(0.2, scale));
+  return Math.min(4, Math.max(0.2, scale));
 }
 
 function applyViewScale(camera: { zoom: (factor: number) => void }, scale: number): void {

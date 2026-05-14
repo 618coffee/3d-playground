@@ -191,7 +191,7 @@ export default function App() {
   }, [execute, runtime]);
 
   const setViewScale = useCallback((scale: number) => {
-    const nextScale = clampScale(scale, 0.2, 2);
+    const nextScale = clampScale(scale, 0.2, 4);
     setViewScaleState(nextScale);
     runtime.setViewScale(nextScale);
   }, [runtime]);
