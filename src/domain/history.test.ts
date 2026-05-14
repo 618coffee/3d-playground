@@ -55,6 +55,26 @@ describe('history store', () => {
     expect(history.canRedo()).toBe(true);
   });
 
+  it('updates the current scene without creating a history entry', () => {
+    const initialScene = createInitialScene([baseMesh]);
+    const history = createHistoryStore(initialScene);
+
+    history.updateCurrent({
+      ...initialScene,
+      meshes: [
+        {
+          ...baseMesh,
+          transform: { ...baseMesh.transform, rotationDeg: [0, 20, 0] },
+        },
+      ],
+      selection: ['mesh-1'],
+    });
+
+    expect(history.current().meshes[0].transform.rotationDeg).toEqual([0, 20, 0]);
+    expect(history.entries()).toHaveLength(0);
+    expect(history.canUndo()).toBe(false);
+  });
+
   it('clones mesh entities with independent identity and translated position', () => {
     const clone = cloneMeshEntity(baseMesh, {
       id: 'mesh-copy-1',

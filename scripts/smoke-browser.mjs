@@ -52,6 +52,8 @@ try {
     const hasCanvas = Boolean(document.querySelector('canvas'));
     const canvasVisible = visibleCanvasMetrics();
     const hasSample = Boolean(byText('Blue titanium fan stage'));
+    const timelineTypes = () => [...document.querySelectorAll('.history-row strong')].map((item) => item.textContent?.trim()).filter(Boolean);
+    const timelineDetails = () => [...document.querySelectorAll('.history-row em')].map((item) => item.textContent?.trim()).filter(Boolean);
     const textarea = document.querySelector('textarea');
     if (!textarea) {
       throw new Error(`AI textarea not found at ${location.href}; body=${document.body.innerText.slice(0, 300)}`);
@@ -64,8 +66,8 @@ try {
     const executeButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('执行'));
     executeButton?.click();
     await new Promise((resolve) => setTimeout(resolve, 80));
-    const hasTimeline = Boolean(byText('rotateMesh'));
     const hasStatus = Boolean(byText('已旋转 30 度'));
+    const rotationSkippedTimeline = !timelineTypes().includes('rotateMesh');
 
     const workspaceSelect = document.querySelector('.workspace-select select');
     if (!(workspaceSelect instanceof HTMLSelectElement)) {
@@ -83,6 +85,19 @@ try {
     selectButton('Robot shoulder joint')?.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }));
     await new Promise((resolve) => setTimeout(resolve, 60));
     const selectedRows = document.querySelectorAll('.object-row.selected').length;
+    const rotateButton = byTitle('拖拽旋转所选对象');
+    rotateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const rotateCapture = document.querySelector('.object-rotate-capture');
+    const captureRect = rotateCapture?.getBoundingClientRect();
+    if (rotateCapture && captureRect) {
+      rotateCapture.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0, clientX: captureRect.left + 220, clientY: captureRect.top + 180 }));
+      rotateCapture.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, button: 0, clientX: captureRect.left + 280, clientY: captureRect.top + 140 }));
+      rotateCapture.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, button: 0, clientX: captureRect.left + 280, clientY: captureRect.top + 140 }));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const dragRotateAvailable = Boolean(rotateCapture);
+    const dragRotateSkippedTimeline = !timelineDetails().includes('viewport drag rotate');
 
     byTitle('隐藏左侧对象树')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     byTitle('隐藏右侧检查器')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -97,6 +112,23 @@ try {
     restoreButton('时间线')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 80));
     const restoredFromCanvas = Boolean(document.querySelector('.left-panel') && document.querySelector('.right-panel') && document.querySelector('.history-panel'));
+    const workbenchRect = document.querySelector('.workbench-grid')?.getBoundingClientRect();
+    const leftRect = document.querySelector('.left-panel-slot')?.getBoundingClientRect();
+    const rightRect = document.querySelector('.right-panel-slot')?.getBoundingClientRect();
+    const bottomRect = document.querySelector('.bottom-panel-slot')?.getBoundingClientRect();
+    const layoutRectsAligned = Boolean(
+      workbenchRect
+      && leftRect
+      && rightRect
+      && bottomRect
+      && Math.abs(leftRect.top - workbenchRect.top) < 1
+      && Math.abs(leftRect.bottom - workbenchRect.bottom) < 1
+      && Math.abs(rightRect.top - workbenchRect.top) < 1
+      && Math.abs(rightRect.bottom - workbenchRect.bottom) < 1
+      && bottomRect.left >= leftRect.right - 1
+      && bottomRect.right <= rightRect.left + 1
+      && Math.abs(bottomRect.bottom - workbenchRect.bottom) < 1
+    );
 
     const leftPanelSlot = document.querySelector('.left-panel-slot');
     const leftResizeHandle = document.querySelector('.left-panel-slot .resize-handle-right');
@@ -112,19 +144,33 @@ try {
     operationsTab?.click();
     await new Promise((resolve) => setTimeout(resolve, 60));
 
-    const scaleInput = document.querySelector('input[aria-label="缩放比例"]');
-    if (!(scaleInput instanceof HTMLInputElement)) {
-      throw new Error('Scale input not found');
+    const viewScaleSelect = document.querySelector('.view-scale-control select[aria-label="视图比例"]');
+    if (!(viewScaleSelect instanceof HTMLSelectElement)) {
+      throw new Error('View scale select not found');
     }
-    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-    valueSetter?.call(scaleInput, '1.5');
-    scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
-    scaleInput.dispatchEvent(new Event('change', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    const scaleButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('应用缩放'));
-    scaleButton?.click();
+    const viewScaleSlider = document.querySelector('.view-scale-control input[aria-label="视图比例滑杆"]');
+    if (!(viewScaleSlider instanceof HTMLInputElement)) {
+      throw new Error('View scale slider not found');
+    }
+    const scaleOptionLabels = [...viewScaleSelect.options].map((option) => option.textContent?.trim());
+    const initialScaleMidpoint = viewScaleSlider.value === '50' && viewScaleSelect.value === '1' && viewScaleSelect.selectedOptions[0]?.textContent === '100%';
+    const scaleRangeBounded = scaleOptionLabels.includes('20%') && scaleOptionLabels.includes('200%') && !scaleOptionLabels.includes('300%') && !scaleOptionLabels.includes('400%');
+
+    const rangeValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    rangeValueSetter?.call(viewScaleSlider, '73');
+    viewScaleSlider.dispatchEvent(new Event('input', { bubbles: true }));
+    viewScaleSlider.dispatchEvent(new Event('change', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 80));
-    const hasScaleStatus = Boolean(byText('已缩放对象到 1.50x'));
+    const customScaleUpdatesNumber = viewScaleSelect.selectedOptions[0]?.textContent === '146%' && viewScaleSlider.value === '73';
+
+    viewScaleSelect.value = '2';
+    viewScaleSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const hasViewScaleStatus = viewScaleSelect.value === '2' && viewScaleSelect.selectedOptions[0]?.textContent === '200%' && viewScaleSlider.value === '100';
+    const viewScaleSkippedTimeline = !timelineDetails().includes('150%');
+    const viewScaleInViewport = Boolean(document.querySelector('.viewer-panel .view-scale-control'));
+    const viewScaleInInspector = Boolean(document.querySelector('.right-panel input[aria-label="视图比例"]'));
+    const objectScaleRemoved = !document.querySelector('input[aria-label="缩放比例"]') && ![...document.querySelectorAll('button')].some((button) => button.textContent?.includes('应用缩放'));
 
     byTitle('显示左侧对象树')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     byTitle('显示右侧检查器')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -132,23 +178,33 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 80));
     const panelsRestored = Boolean(document.querySelector('.left-panel') && document.querySelector('.right-panel') && document.querySelector('.history-panel'));
 
-    return { hasCanvas, canvasVisible, hasSample, hasTimeline, hasStatus, hasRobotSample, robotCanvasVisible, selectedRows, panelsHidden, restoreButtonsVisible, restoredFromCanvas, resizedLeftPanel, hasScaleStatus, panelsRestored };
+    return { hasCanvas, canvasVisible, hasSample, rotationSkippedTimeline, hasStatus, hasRobotSample, robotCanvasVisible, selectedRows, dragRotateAvailable, dragRotateSkippedTimeline, panelsHidden, restoreButtonsVisible, restoredFromCanvas, layoutRectsAligned, resizedLeftPanel, initialScaleMidpoint, scaleRangeBounded, customScaleUpdatesNumber, hasViewScaleStatus, viewScaleSkippedTimeline, viewScaleInViewport, viewScaleInInspector, objectScaleRemoved, panelsRestored };
   });
 
   if (
     !smokeResult.hasCanvas
     || !smokeResult.canvasVisible.ok
     || !smokeResult.hasSample
-    || !smokeResult.hasTimeline
+    || !smokeResult.rotationSkippedTimeline
     || !smokeResult.hasStatus
     || !smokeResult.hasRobotSample
     || !smokeResult.robotCanvasVisible.ok
     || smokeResult.selectedRows < 2
+    || !smokeResult.dragRotateAvailable
+    || !smokeResult.dragRotateSkippedTimeline
     || !smokeResult.panelsHidden
     || !smokeResult.restoreButtonsVisible
     || !smokeResult.restoredFromCanvas
+    || !smokeResult.layoutRectsAligned
     || !smokeResult.resizedLeftPanel
-    || !smokeResult.hasScaleStatus
+    || !smokeResult.initialScaleMidpoint
+    || !smokeResult.scaleRangeBounded
+    || !smokeResult.customScaleUpdatesNumber
+    || !smokeResult.hasViewScaleStatus
+    || !smokeResult.viewScaleSkippedTimeline
+    || !smokeResult.viewScaleInViewport
+    || smokeResult.viewScaleInInspector
+    || !smokeResult.objectScaleRemoved
     || !smokeResult.panelsRestored
   ) {
     throw new Error(`Smoke checks failed: ${JSON.stringify(smokeResult)}`);

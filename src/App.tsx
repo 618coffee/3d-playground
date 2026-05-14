@@ -32,6 +32,7 @@ export default function App() {
   const [workspaceId, setWorkspaceId] = useState<SampleWorkspaceId>('turbofan');
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>({ left: true, right: true, bottom: true });
   const [panelSizes, setPanelSizes] = useState<PanelSizes>({ left: 260, right: 330, bottom: 156 });
+  const [viewScale, setViewScaleState] = useState(1);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef<HistoryStore>(createHistoryStore(emptyScene));
   const datasetsRef = useRef(new Map<string, unknown>());
@@ -58,6 +59,8 @@ export default function App() {
     historyRef.current = createHistoryStore(nextScene);
     setPendingCommand(null);
     setWorkspaceId(workspace.id);
+    setViewScaleState(1);
+    runtime.setViewScale(1);
     setScene(nextScene);
     setHistoryVersion((version) => version + 1);
     setLastMessage(`已加载${workspace.label}工作区。`);
@@ -174,6 +177,25 @@ export default function App() {
     });
   }, [execute]);
 
+  const rotateSelectionFromDrag = useCallback((deltaX: number, deltaY: number) => {
+    const rotation = runtime.screenDragRotation(deltaX, deltaY);
+    if (!rotation) return;
+    execute({
+      id: `drag-rotate-${Date.now()}`,
+      type: 'rotateMesh',
+      target: { source: 'selection' },
+      params: { axis: rotation.axis, angleDeg: rotation.angleDeg, pivot: 'boundsCenter', space: 'world' },
+      source: 'ui',
+      rawText: 'viewport drag rotate',
+    });
+  }, [execute, runtime]);
+
+  const setViewScale = useCallback((scale: number) => {
+    const nextScale = clampScale(scale, 0.2, 2);
+    setViewScaleState(nextScale);
+    runtime.setViewScale(nextScale);
+  }, [runtime]);
+
   const toggleVisibility = useCallback((meshId: string, visible: boolean) => {
     execute({ id: `visible-${Date.now()}`, type: 'setMeshVisibility', target: { meshId }, params: { visible }, source: 'ui' });
   }, [execute]);
@@ -238,23 +260,34 @@ export default function App() {
             <div className="panel-resize-handle resize-handle-right" role="separator" aria-orientation="vertical" title="调整对象树宽度" onMouseDown={(event) => startPanelResize('left', event)} />
           </div>
         ) : null}
-        <div className="viewer-slot">
-          <ViewerPanel
-            runtime={runtime}
-            meshCount={scene.meshes.filter((mesh) => mesh.visible).length}
-            selectedName={selectedLabel}
-            displayMode={scene.displayMode}
-            onDisplayModeChange={setDisplayMode}
-            onDropFile={importFile}
-            onResetView={(orientation) => execute({
-              id: `reset-${Date.now()}`,
-              type: 'resetView',
-              target: { scope: 'viewer' },
-              params: { fit: 'visible', orientation },
-              source: 'ui',
-            })}
-          />
-          <PanelRestoreControls visibility={panelVisibility} onTogglePanel={togglePanel} />
+        <div className={`center-panel-slot ${panelVisibility.bottom ? '' : 'bottom-panel-hidden'}`}>
+          <div className="viewer-slot">
+            <ViewerPanel
+              runtime={runtime}
+              meshCount={scene.meshes.filter((mesh) => mesh.visible).length}
+              selectedName={selectedLabel}
+              viewScale={viewScale}
+              displayMode={scene.displayMode}
+              onDisplayModeChange={setDisplayMode}
+              onDropFile={importFile}
+              onRotateSelection={rotateSelectionFromDrag}
+              onViewScaleChange={setViewScale}
+              onResetView={(orientation) => execute({
+                id: `reset-${Date.now()}`,
+                type: 'resetView',
+                target: { scope: 'viewer' },
+                params: { fit: 'visible', orientation },
+                source: 'ui',
+              })}
+            />
+            <PanelRestoreControls visibility={panelVisibility} onTogglePanel={togglePanel} />
+          </div>
+          {panelVisibility.bottom ? (
+            <div className="bottom-panel-slot">
+              <div className="panel-resize-handle resize-handle-top" role="separator" aria-orientation="horizontal" title="调整时间线高度" onMouseDown={(event) => startPanelResize('bottom', event)} />
+              <HistoryTimeline entries={historyEntries} lastMessage={lastMessage} onHidePanel={() => togglePanel('bottom')} />
+            </div>
+          ) : null}
         </div>
         {panelVisibility.right ? (
           <div className="panel-slot right-panel-slot">
@@ -272,12 +305,6 @@ export default function App() {
           </div>
         ) : null}
       </div>
-      {panelVisibility.bottom ? (
-        <div className="bottom-panel-slot">
-          <div className="panel-resize-handle resize-handle-top" role="separator" aria-orientation="horizontal" title="调整时间线高度" onMouseDown={(event) => startPanelResize('bottom', event)} />
-          <HistoryTimeline entries={historyEntries} lastMessage={lastMessage} onHidePanel={() => togglePanel('bottom')} />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -323,6 +350,11 @@ function clampPanelSizes(next: PanelSizes, visibility: PanelVisibility, shell: H
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function clampScale(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(max, Math.max(min, value));
 }
 
 function restoreRuntimeScene(runtime: ReturnType<typeof createVtkRuntime>, scene: SceneState, datasets: Map<string, unknown>): void {

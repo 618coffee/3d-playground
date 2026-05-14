@@ -59,12 +59,17 @@ export function createOperationExecutor(history: HistoryStore, runtime?: ViewerR
       }
 
       const nextScene = applyToScene(command, scene, targetIds, runtime);
-      history.record(command, nextScene);
+      const recordPolicy = historyPolicy(command, scene, nextScene);
+      if (recordPolicy.mode === 'record') {
+        history.record(command, nextScene);
+      } else if (recordPolicy.mode === 'update') {
+        history.updateCurrent(nextScene);
+      }
 
       return {
         actionId: command.id,
         status: 'applied',
-        message: successMessage(command),
+        message: recordPolicy.message ?? successMessage(command),
         affectedMeshIds: targetIds,
         requiresConfirmation: false,
         warnings: [],
@@ -216,6 +221,18 @@ function updateSelection(current: string[], targetIds: string[], mode: 'replace'
   if (mode === 'replace') return targetIds;
   if (mode === 'remove') return current.filter((id) => !targetIds.includes(id));
   return [...current, ...targetIds.filter((id) => !current.includes(id))];
+}
+
+function historyPolicy(command: OperationCommand, scene: SceneState, nextScene: SceneState): { mode: 'record' | 'update' | 'ignore'; message?: string } {
+  if (command.type === 'rotateMesh') return { mode: 'update' };
+  if (command.type === 'selectMesh' && sameStringList(scene.selection, nextScene.selection)) {
+    return { mode: 'ignore', message: '选择未变化。' };
+  }
+  return { mode: 'record' };
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
 }
 
 function rotateVector(rotation: Vec3, axis: 'x' | 'y' | 'z' | Vec3, angleDeg: number): Vec3 {

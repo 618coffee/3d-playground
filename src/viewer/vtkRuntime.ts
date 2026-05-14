@@ -18,6 +18,7 @@ import type { DisplayMode, MeshEntity, ProceduralGeometry, Vec3, VisualClip } fr
 type VtkActor = ReturnType<typeof vtkActor.newInstance>;
 type VtkMapper = ReturnType<typeof vtkMapper.newInstance>;
 type VtkGenericWindow = ReturnType<typeof vtkGenericRenderWindow.newInstance>;
+type VtkCamera = ReturnType<ReturnType<VtkGenericWindow['getRenderer']>['getActiveCamera']>;
 type PickSubscription = { unsubscribe: () => void };
 
 type RuntimeRecord = {
@@ -46,6 +47,8 @@ export type VtkRuntime = {
   selectMeshes: (meshIds: string[]) => void;
   setMeshVisibility: (meshId: string, visible: boolean) => void;
   setDisplayMode: (mode: DisplayMode) => void;
+  screenDragRotation: (deltaX: number, deltaY: number) => { axis: Vec3; angleDeg: number } | undefined;
+  setViewScale: (scale: number) => void;
   resize: () => void;
   onPick: (callback: (meshId: string) => void) => () => void;
   render: () => void;
@@ -55,6 +58,8 @@ export type VtkRuntime = {
 export function createVtkRuntime(): VtkRuntime {
   let genericWindow: VtkGenericWindow | undefined;
   let displayMode: DisplayMode = 'surface';
+  let viewScale = 1;
+  let viewportHeight: number | undefined;
   let pickCallback: ((meshId: string) => void) | undefined;
   let pickSubscription: PickSubscription | undefined;
   const records = new Map<string, RuntimeRecord>();
@@ -101,9 +106,7 @@ export function createVtkRuntime(): VtkRuntime {
       if (!record) return;
       record.actors.forEach((actor) => {
         if (Array.isArray(axis)) {
-          actor.rotateX(axis[0] * angleDeg);
-          actor.rotateY(axis[1] * angleDeg);
-          actor.rotateZ(axis[2] * angleDeg);
+          actor.rotateWXYZ(angleDeg, axis[0], axis[1], axis[2]);
           return;
         }
         if (axis === 'x') actor.rotateX(angleDeg);
@@ -171,7 +174,9 @@ export function createVtkRuntime(): VtkRuntime {
       }
       camera.setFocalPoint(0, 0, 0);
       renderer.resetCamera();
+      applyViewScale(camera, viewScale);
       renderer.resetCameraClippingRange();
+      viewportHeight = currentViewportHeight(genericWindow);
       render();
     },
     selectMeshes(meshIds) {
@@ -203,8 +208,41 @@ export function createVtkRuntime(): VtkRuntime {
       });
       render();
     },
+    screenDragRotation(deltaX, deltaY) {
+      const renderer = genericWindow?.getRenderer();
+      if (!renderer) return undefined;
+      const camera = renderer.getActiveCamera();
+      const up = normalizeVec3(camera.getViewUp());
+      const forward = normalizeVec3(camera.getDirectionOfProjection());
+      const right = normalizeVec3(crossVec3(forward, up));
+      const rotationVector = addVec3Local(scaleVec3(up, deltaX), scaleVec3(right, deltaY));
+      const dragLength = Math.hypot(rotationVector[0], rotationVector[1], rotationVector[2]);
+      if (dragLength < 0.1) return undefined;
+      return {
+        axis: scaleVec3(rotationVector, 1 / dragLength),
+        angleDeg: Math.min(18, dragLength * 0.28),
+      };
+    },
+    setViewScale(scale) {
+      viewScale = clampViewScale(scale);
+      const renderer = genericWindow?.getRenderer();
+      if (!renderer) return;
+      renderer.resetCamera();
+      applyViewScale(renderer.getActiveCamera(), viewScale);
+      renderer.resetCameraClippingRange();
+      viewportHeight = currentViewportHeight(genericWindow);
+      render();
+    },
     resize() {
+      const previousHeight = viewportHeight;
       genericWindow?.resize();
+      const nextHeight = currentViewportHeight(genericWindow);
+      if (previousHeight && nextHeight && previousHeight !== nextHeight) {
+        preserveVerticalObjectScale(genericWindow?.getRenderer().getActiveCamera(), nextHeight / previousHeight);
+      }
+      viewportHeight = nextHeight;
+      genericWindow?.getRenderer().resetCameraClippingRange();
+      render();
     },
     onPick(callback) {
       pickCallback = callback;
@@ -237,6 +275,31 @@ export function createVtkRuntime(): VtkRuntime {
       return { mesh, dataset };
     },
   };
+}
+
+function clampViewScale(scale: number): number {
+  if (!Number.isFinite(scale)) return 1;
+  return Math.min(2, Math.max(0.2, scale));
+}
+
+function applyViewScale(camera: { zoom: (factor: number) => void }, scale: number): void {
+  camera.zoom(clampViewScale(scale));
+}
+
+function currentViewportHeight(genericWindow: VtkGenericWindow | undefined): number | undefined {
+  const height = genericWindow?.getContainer()?.getBoundingClientRect().height;
+  return height && height > 0 ? height : undefined;
+}
+
+function preserveVerticalObjectScale(camera: VtkCamera | undefined, heightRatio: number): void {
+  if (!camera || !Number.isFinite(heightRatio) || heightRatio <= 0 || heightRatio === 1) return;
+  if (camera.getParallelProjection()) {
+    camera.setParallelScale(camera.getParallelScale() * heightRatio);
+    return;
+  }
+  const halfAngle = (camera.getViewAngle() * Math.PI) / 360;
+  const nextAngle = (Math.atan(Math.tan(halfAngle) * heightRatio) * 360) / Math.PI;
+  camera.setViewAngle(nextAngle);
 }
 
 function configurePicking(
@@ -272,6 +335,7 @@ function createProceduralRecord(mesh: MeshEntity): RuntimeRecord {
   }
   const pieces = actorsForGeometry(mesh.geometry, mesh.color, mesh.opacity);
   pieces.actors.forEach((actor) => {
+    actor.setOrigin(...boundsCenter(mesh.bounds));
     actor.setPosition(...mesh.transform.position);
     actor.setOrientation(...mesh.transform.rotationDeg);
     actor.setScale(...mesh.transform.scale);
@@ -284,11 +348,42 @@ function createDatasetRecord(mesh: MeshEntity, dataset: unknown): RuntimeRecord 
   mapper.setInputData(dataset as never);
   const actor = vtkActor.newInstance();
   actor.setMapper(mapper);
+  actor.setOrigin(...boundsCenter(mesh.bounds));
   actor.setPosition(...mesh.transform.position);
   actor.setOrientation(...mesh.transform.rotationDeg);
   actor.setScale(...mesh.transform.scale);
   applyActorStyle(actor, mesh.color, mesh.opacity);
   return { mesh, actors: [actor], mappers: [mapper], dataset };
+}
+
+function boundsCenter(bounds: MeshEntity['bounds']): Vec3 {
+  return [
+    (bounds[0] + bounds[1]) / 2,
+    (bounds[2] + bounds[3]) / 2,
+    (bounds[4] + bounds[5]) / 2,
+  ];
+}
+
+function addVec3Local(left: Vec3, right: Vec3): Vec3 {
+  return [left[0] + right[0], left[1] + right[1], left[2] + right[2]];
+}
+
+function scaleVec3(vector: Vec3, factor: number): Vec3 {
+  return [vector[0] * factor, vector[1] * factor, vector[2] * factor];
+}
+
+function crossVec3(left: Vec3, right: Vec3): Vec3 {
+  return [
+    left[1] * right[2] - left[2] * right[1],
+    left[2] * right[0] - left[0] * right[2],
+    left[0] * right[1] - left[1] * right[0],
+  ];
+}
+
+function normalizeVec3(vector: number[]): Vec3 {
+  const length = Math.hypot(vector[0], vector[1], vector[2]);
+  if (!Number.isFinite(length) || length === 0) return [1, 0, 0];
+  return [vector[0] / length, vector[1] / length, vector[2] / length];
 }
 
 function actorsForGeometry(geometry: ProceduralGeometry, color: string, opacity: number): { actors: VtkActor[]; mappers: VtkMapper[] } {

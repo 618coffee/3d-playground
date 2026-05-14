@@ -109,7 +109,6 @@ function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { sele
   const [cloneCount, setCloneCount] = useState(2);
   const [cloneAxis, setCloneAxis] = useState<'x' | 'y' | 'z'>('x');
   const [cloneDistance, setCloneDistance] = useState(18);
-  const [scaleRatio, setScaleRatio] = useState(1);
   const [clipAxis, setClipAxis] = useState<'x' | 'y' | 'z'>('x');
   const [clipOrigin, setClipOrigin] = useState(0);
   const [keepSide, setKeepSide] = useState<'positive' | 'negative'>('positive');
@@ -155,34 +154,6 @@ function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { sele
         </button>
       </section>
       <section className="tool-section">
-        <div className="section-title">缩放 <span>{formatScaleLabel(selectedMesh)}</span></div>
-        <label className="field-row scale-row">
-          <span>比例</span>
-          <input
-            type="range"
-            min={0.1}
-            max={4}
-            step={0.05}
-            value={scaleRatio}
-            disabled={disabled}
-            onChange={(event) => setScaleRatio(Number(event.target.value))}
-          />
-          <input
-            type="number"
-            min={0.1}
-            max={4}
-            step={0.05}
-            value={scaleRatio}
-            disabled={disabled}
-            aria-label="缩放比例"
-            onChange={(event) => setScaleRatio(clampScale(Number(event.target.value)))}
-          />
-        </label>
-        <button disabled={disabled} onClick={() => onExecute({ id: `ui-scale-${Date.now()}`, type: 'setMeshScale', target, params: { scale: [scaleRatio, scaleRatio, scaleRatio] }, source: 'ui' })}>
-          应用缩放
-        </button>
-      </section>
-      <section className="tool-section">
         <div className="section-title">切割预览</div>
         <label className="field-row">
           <span>平面</span>
@@ -217,16 +188,6 @@ function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { sele
       </section>
     </div>
   );
-}
-
-function formatScaleLabel(mesh?: MeshEntity): string {
-  if (!mesh) return '0 selected';
-  return `${mesh.transform.scale[0].toFixed(2)} x`;
-}
-
-function clampScale(value: number): number {
-  if (!Number.isFinite(value)) return 1;
-  return Math.min(4, Math.max(0.1, value));
 }
 
 function axisVector(axis: 'x' | 'y' | 'z', value: number): [number, number, number] {

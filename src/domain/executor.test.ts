@@ -23,7 +23,7 @@ const mesh: MeshEntity = {
 };
 
 describe('operation executor', () => {
-  it('rotates selected meshes and records history', () => {
+  it('rotates selected meshes without recording history', () => {
     const history = createHistoryStore(createInitialScene([mesh]));
     const executor = createOperationExecutor(history);
     const command: OperationCommand = {
@@ -39,7 +39,40 @@ describe('operation executor', () => {
     expect(result.status).toBe('applied');
     expect(result.affectedMeshIds).toEqual(['fan-1']);
     expect(history.current().meshes[0].transform.rotationDeg).toEqual([0, 0, 30]);
-    expect(history.entries()).toHaveLength(1);
+    expect(history.entries()).toHaveLength(0);
+  });
+
+  it('skips repeated selection entries while keeping changed selections', () => {
+    const otherMesh = { ...mesh, id: 'fan-2', name: 'second fan', selected: false };
+    const history = createHistoryStore(createInitialScene([mesh, otherMesh]));
+    const executor = createOperationExecutor(history);
+
+    const repeated = executor.execute({
+      id: 'select-same',
+      type: 'selectMesh',
+      target: { meshId: 'fan-1' },
+      params: { mode: 'replace' },
+      source: 'ui',
+    });
+    const changed = executor.execute({
+      id: 'select-other',
+      type: 'selectMesh',
+      target: { meshId: 'fan-2' },
+      params: { mode: 'replace' },
+      source: 'ui',
+    });
+    executor.execute({
+      id: 'select-other-again',
+      type: 'selectMesh',
+      target: { meshId: 'fan-2' },
+      params: { mode: 'replace' },
+      source: 'ui',
+    });
+
+    expect(repeated.message).toBe('选择未变化。');
+    expect(changed.message).toBe('已更新选择。');
+    expect(history.current().selection).toEqual(['fan-2']);
+    expect(history.entries().map((entry) => entry.id)).toEqual(['select-other']);
   });
 
   it('clones selected mesh multiple times using incremental offsets', () => {

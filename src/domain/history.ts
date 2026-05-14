@@ -13,6 +13,7 @@ export type HistoryStore = {
   current: () => SceneState;
   entries: () => HistoryEntry[];
   record: (command: OperationCommand, nextScene: SceneState) => void;
+  updateCurrent: (nextScene: SceneState) => void;
   undo: () => ActionResult;
   redo: () => ActionResult;
   canUndo: () => boolean;
@@ -38,6 +39,13 @@ export function createHistoryStore(initialScene: SceneState): HistoryStore {
       });
       cursor = entries.length - 1;
       currentScene = cloneScene(nextScene);
+    },
+    updateCurrent: (nextScene) => {
+      entries = entries.slice(0, cursor + 1);
+      currentScene = cloneScene(nextScene);
+      if (cursor >= 0) {
+        entries[cursor] = { ...entries[cursor], after: cloneScene(nextScene) };
+      }
     },
     undo: () => {
       if (cursor < 0) {
