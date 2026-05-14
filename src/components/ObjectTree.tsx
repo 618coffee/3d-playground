@@ -1,17 +1,21 @@
-import { useMemo, useState } from 'react';
-import { Box, Eye, EyeOff, Lock, LockOpen, Search } from 'lucide-react';
+import { type MouseEvent, useMemo, useState } from 'react';
+import { Box, Eye, EyeOff, Lock, LockOpen, PanelLeftClose, Search } from 'lucide-react';
 import type { MeshEntity } from '../domain/actions';
+
+type SelectionMode = 'replace' | 'add' | 'remove';
 
 type ObjectTreeProps = {
   meshes: MeshEntity[];
   selection: string[];
-  onSelect: (meshId: string) => void;
+  onSelect: (meshIds: string[], mode?: SelectionMode) => void;
   onToggleVisibility?: (meshId: string, visible: boolean) => void;
   onToggleLock?: (meshId: string, locked: boolean) => void;
+  onHidePanel?: () => void;
 };
 
-export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, onToggleLock }: ObjectTreeProps) {
+export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, onToggleLock, onHidePanel }: ObjectTreeProps) {
   const [query, setQuery] = useState('');
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredMeshes = useMemo(() => {
     if (!normalizedQuery) return meshes;
@@ -22,6 +26,24 @@ export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, on
   const hasMatches = filteredMeshes.length > 0;
   const countLabel = normalizedQuery ? `${filteredMeshes.length}/${meshes.length} mesh` : `${meshes.length} mesh`;
 
+  const handleSelect = (mesh: MeshEntity, event: MouseEvent<HTMLButtonElement>) => {
+    if (event.shiftKey && lastSelectedId) {
+      const rangeIds = idsBetween(filteredMeshes, lastSelectedId, mesh.id);
+      if (rangeIds.length > 0) {
+        onSelect(rangeIds, event.metaKey || event.ctrlKey ? 'add' : 'replace');
+        setLastSelectedId(mesh.id);
+        return;
+      }
+    }
+
+    if (event.metaKey || event.ctrlKey) {
+      onSelect([mesh.id], selection.includes(mesh.id) ? 'remove' : 'add');
+    } else {
+      onSelect([mesh.id], 'replace');
+    }
+    setLastSelectedId(mesh.id);
+  };
+
   return (
     <aside className="left-panel panel-shell">
       <div className="panel-header">
@@ -29,6 +51,11 @@ export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, on
           <strong>对象树</strong>
           <span>{countLabel}</span>
         </div>
+        {onHidePanel ? (
+          <button type="button" className="icon-button panel-icon-button" onClick={onHidePanel} title="隐藏对象树" aria-label="隐藏对象树">
+            <PanelLeftClose size={15} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
       <div className="search-row">
         <Search size={14} aria-hidden="true" />
@@ -42,7 +69,7 @@ export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, on
       <div className="sr-only" aria-live="polite">
         {hasMeshes ? `对象树显示 ${filteredMeshes.length} 个对象，共 ${meshes.length} 个。` : '对象树为空。'}
       </div>
-      <div className="object-list" role="list" aria-label="对象列表">
+      <div className="object-list" role="listbox" aria-label="对象列表" aria-multiselectable="true">
         {!hasMeshes ? (
           <div className="empty-panel">拖入网格文件，或加载示例涡扇模型。</div>
         ) : !hasMatches ? (
@@ -54,10 +81,10 @@ export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, on
               className={`object-row ${selection.includes(mesh.id) ? 'selected' : ''} ${mesh.visible ? '' : 'hidden'} ${
                 mesh.locked ? 'locked' : ''
               }`}
-              role="listitem"
+              role="option"
               aria-selected={selection.includes(mesh.id)}
             >
-              <button type="button" className="object-select-button" onClick={() => onSelect(mesh.id)} aria-label={getSelectLabel(mesh)}>
+              <button type="button" className="object-select-button" onClick={(event) => handleSelect(mesh, event)} aria-label={getSelectLabel(mesh)}>
                 <Box size={16} aria-hidden="true" />
                 <span className="swatch" style={{ background: mesh.color }} aria-hidden="true" />
                 <span className="object-name">{mesh.name}</span>
@@ -91,6 +118,15 @@ export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, on
       </div>
     </aside>
   );
+}
+
+function idsBetween(meshes: MeshEntity[], fromId: string, toId: string): string[] {
+  const fromIndex = meshes.findIndex((mesh) => mesh.id === fromId);
+  const toIndex = meshes.findIndex((mesh) => mesh.id === toId);
+  if (fromIndex === -1 || toIndex === -1) return [];
+  const start = Math.min(fromIndex, toIndex);
+  const end = Math.max(fromIndex, toIndex);
+  return meshes.slice(start, end + 1).map((mesh) => mesh.id);
 }
 
 function buildMeshSearchText(mesh: MeshEntity): string {

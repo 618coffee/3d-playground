@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TopBar } from './components/TopBar';
 import { ObjectTree } from './components/ObjectTree';
 import { ViewerPanel } from './components/ViewerPanel';
@@ -8,10 +8,20 @@ import type { DisplayMode, OperationCommand } from './domain/actions';
 import { createOperationExecutor } from './domain/executor';
 import { createHistoryStore, type HistoryStore } from './domain/history';
 import { createInitialScene, type SceneState } from './domain/scene';
-import { createTurbofanSample } from './viewer/sampleEngine';
+import { SAMPLE_WORKSPACES, createSampleWorkspace, type SampleWorkspaceId } from './viewer/sampleEngine';
 import { createVtkRuntime } from './viewer/vtkRuntime';
 
 const emptyScene = createInitialScene();
+type PanelKey = 'left' | 'right' | 'bottom';
+type PanelVisibility = Record<PanelKey, boolean>;
+type PanelSizes = { left: number; right: number; bottom: number };
+
+const PANEL_LIMITS = {
+  left: { min: 220, max: 420 },
+  right: { min: 300, max: 520 },
+  bottom: { min: 96, max: 260 },
+  viewer: { minWidth: 520, minHeight: 320 },
+};
 
 export default function App() {
   const runtime = useMemo(() => createVtkRuntime(), []);
@@ -19,10 +29,16 @@ export default function App() {
   const [lastMessage, setLastMessage] = useState('加载示例涡扇模型即可开始演示。');
   const [pendingCommand, setPendingCommand] = useState<OperationCommand | null>(null);
   const [historyVersion, setHistoryVersion] = useState(0);
+  const [workspaceId, setWorkspaceId] = useState<SampleWorkspaceId>('turbofan');
+  const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>({ left: true, right: true, bottom: true });
+  const [panelSizes, setPanelSizes] = useState<PanelSizes>({ left: 260, right: 330, bottom: 156 });
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef<HistoryStore>(createHistoryStore(emptyScene));
   const datasetsRef = useRef(new Map<string, unknown>());
 
-  const selectedMesh = scene.meshes.find((mesh) => scene.selection.includes(mesh.id));
+  const selectedMeshes = scene.meshes.filter((mesh) => scene.selection.includes(mesh.id));
+  const selectedMesh = selectedMeshes[0];
+  const selectedLabel = scene.selection.length > 1 ? `${scene.selection.length} selected` : selectedMesh?.name;
   const historyEntries = historyRef.current.entries();
 
   const refreshFromHistory = useCallback((message?: string) => {
@@ -31,8 +47,9 @@ export default function App() {
     if (message) setLastMessage(message);
   }, []);
 
-  const loadSample = useCallback(() => {
-    const meshes = createTurbofanSample();
+  const loadWorkspace = useCallback((nextWorkspaceId: SampleWorkspaceId) => {
+    const workspace = SAMPLE_WORKSPACES.find((item) => item.id === nextWorkspaceId) ?? SAMPLE_WORKSPACES[0];
+    const meshes = createSampleWorkspace(workspace.id);
     const nextScene = createInitialScene(meshes);
     runtime.clear();
     datasetsRef.current.clear();
@@ -40,14 +57,15 @@ export default function App() {
     runtime.selectMeshes(nextScene.selection);
     historyRef.current = createHistoryStore(nextScene);
     setPendingCommand(null);
+    setWorkspaceId(workspace.id);
     setScene(nextScene);
     setHistoryVersion((version) => version + 1);
-    setLastMessage('已加载程序生成的涡扇发动机剖视示例。');
+    setLastMessage(`已加载${workspace.label}工作区。`);
   }, [runtime]);
 
   useEffect(() => {
-    loadSample();
-  }, [loadSample]);
+    loadWorkspace('turbofan');
+  }, [loadWorkspace]);
 
   const execute = useCallback((command: OperationCommand) => {
     const executor = createOperationExecutor(historyRef.current, runtime);
@@ -97,15 +115,44 @@ export default function App() {
     }
   }, [execute, runtime]);
 
-  const selectMesh = useCallback((meshId: string) => {
+  const selectMeshes = useCallback((meshIds: string[], mode: 'replace' | 'add' | 'remove' = 'replace') => {
     execute({
       id: `select-${Date.now()}`,
       type: 'selectMesh',
-      target: { meshId },
-      params: { mode: 'replace' },
+      target: meshIds.length === 1 ? { meshId: meshIds[0] } : { meshIds },
+      params: { mode },
       source: 'ui',
     });
   }, [execute]);
+
+  const selectMesh = useCallback((meshId: string) => {
+    selectMeshes([meshId], 'replace');
+  }, [selectMeshes]);
+
+  const togglePanel = useCallback((panel: PanelKey) => {
+    setPanelVisibility((current) => ({ ...current, [panel]: !current[panel] }));
+  }, []);
+
+  const startPanelResize = useCallback((panel: PanelKey, event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startSizes = panelSizes;
+    const handleMove = (moveEvent: MouseEvent) => {
+      const delta = panel === 'bottom' ? startY - moveEvent.clientY : moveEvent.clientX - startX;
+      const directionalDelta = panel === 'right' ? -delta : delta;
+      const nextSize = startSizes[panel] + directionalDelta;
+      setPanelSizes((current) => clampPanelSizes({ ...current, [panel]: nextSize }, panelVisibility, shellRef.current));
+    };
+    const handleUp = () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      document.body.classList.remove('is-resizing-panel');
+    };
+    document.body.classList.add('is-resizing-panel');
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp, { once: true });
+  }, [panelSizes, panelVisibility]);
 
   const resetView = useCallback(() => {
     execute({
@@ -154,7 +201,11 @@ export default function App() {
   void historyVersion;
 
   return (
-    <div className="app-shell">
+    <div
+      ref={shellRef}
+      className={`app-shell ${panelVisibility.bottom ? '' : 'bottom-panel-hidden'}`}
+      style={layoutStyle(panelSizes, panelVisibility)}
+    >
       <TopBar
         meshCount={scene.meshes.length}
         selectedCount={scene.selection.length}
@@ -162,47 +213,116 @@ export default function App() {
         displayMode={scene.displayMode}
         canUndo={historyRef.current.canUndo()}
         canRedo={historyRef.current.canRedo()}
-        onLoadSample={loadSample}
+        workspaces={SAMPLE_WORKSPACES}
+        activeWorkspace={workspaceId}
+        panelVisibility={panelVisibility}
+        onSelectWorkspace={loadWorkspace}
+        onReloadWorkspace={() => loadWorkspace(workspaceId)}
+        onTogglePanel={togglePanel}
         onImportFile={importFile}
         onUndo={undo}
         onRedo={redo}
         onResetView={resetView}
       />
-      <div className="workbench-grid">
-        <ObjectTree
-          meshes={scene.meshes}
-          selection={scene.selection}
-          onSelect={selectMesh}
-          onToggleVisibility={toggleVisibility}
-          onToggleLock={toggleLock}
-        />
-        <ViewerPanel
-          runtime={runtime}
-          meshCount={scene.meshes.filter((mesh) => mesh.visible).length}
-          selectedName={selectedMesh?.name}
-          displayMode={scene.displayMode}
-          onDisplayModeChange={setDisplayMode}
-          onDropFile={importFile}
-          onResetView={(orientation) => execute({
-            id: `reset-${Date.now()}`,
-            type: 'resetView',
-            target: { scope: 'viewer' },
-            params: { fit: 'visible', orientation },
-            source: 'ui',
-          })}
-        />
-        <InspectorPanel
-          scene={scene}
-          selectedMesh={selectedMesh}
-          pendingCommand={pendingCommand}
-          onConfirmPending={confirmPending}
-          onCancelPending={cancelPending}
-          onExecute={execute}
-        />
+      <div className={`workbench-grid ${panelVisibility.left ? '' : 'left-panel-hidden'} ${panelVisibility.right ? '' : 'right-panel-hidden'}`}>
+        {panelVisibility.left ? (
+          <div className="panel-slot left-panel-slot">
+            <ObjectTree
+              meshes={scene.meshes}
+              selection={scene.selection}
+              onSelect={selectMeshes}
+              onToggleVisibility={toggleVisibility}
+              onToggleLock={toggleLock}
+              onHidePanel={() => togglePanel('left')}
+            />
+            <div className="panel-resize-handle resize-handle-right" role="separator" aria-orientation="vertical" title="调整对象树宽度" onMouseDown={(event) => startPanelResize('left', event)} />
+          </div>
+        ) : null}
+        <div className="viewer-slot">
+          <ViewerPanel
+            runtime={runtime}
+            meshCount={scene.meshes.filter((mesh) => mesh.visible).length}
+            selectedName={selectedLabel}
+            displayMode={scene.displayMode}
+            onDisplayModeChange={setDisplayMode}
+            onDropFile={importFile}
+            onResetView={(orientation) => execute({
+              id: `reset-${Date.now()}`,
+              type: 'resetView',
+              target: { scope: 'viewer' },
+              params: { fit: 'visible', orientation },
+              source: 'ui',
+            })}
+          />
+          <PanelRestoreControls visibility={panelVisibility} onTogglePanel={togglePanel} />
+        </div>
+        {panelVisibility.right ? (
+          <div className="panel-slot right-panel-slot">
+            <div className="panel-resize-handle resize-handle-left" role="separator" aria-orientation="vertical" title="调整检查器宽度" onMouseDown={(event) => startPanelResize('right', event)} />
+            <InspectorPanel
+              scene={scene}
+              selectedMesh={selectedMesh}
+              selectedMeshes={selectedMeshes}
+              pendingCommand={pendingCommand}
+              onConfirmPending={confirmPending}
+              onCancelPending={cancelPending}
+              onExecute={execute}
+              onHidePanel={() => togglePanel('right')}
+            />
+          </div>
+        ) : null}
       </div>
-      <HistoryTimeline entries={historyEntries} lastMessage={lastMessage} />
+      {panelVisibility.bottom ? (
+        <div className="bottom-panel-slot">
+          <div className="panel-resize-handle resize-handle-top" role="separator" aria-orientation="horizontal" title="调整时间线高度" onMouseDown={(event) => startPanelResize('bottom', event)} />
+          <HistoryTimeline entries={historyEntries} lastMessage={lastMessage} onHidePanel={() => togglePanel('bottom')} />
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function PanelRestoreControls({ visibility, onTogglePanel }: { visibility: PanelVisibility; onTogglePanel: (panel: PanelKey) => void }) {
+  if (visibility.left && visibility.right && visibility.bottom) return null;
+  return (
+    <div className="panel-restore-layer" aria-label="面板恢复控制">
+      {!visibility.left ? <button className="restore-panel-button restore-left" onClick={() => onTogglePanel('left')}>对象树</button> : null}
+      {!visibility.right ? <button className="restore-panel-button restore-right" onClick={() => onTogglePanel('right')}>检查器</button> : null}
+      {!visibility.bottom ? <button className="restore-panel-button restore-bottom" onClick={() => onTogglePanel('bottom')}>时间线</button> : null}
+    </div>
+  );
+}
+
+function layoutStyle(sizes: PanelSizes, visibility: PanelVisibility): CSSProperties {
+  const columns = [visibility.left ? `${sizes.left}px` : null, 'minmax(520px, 1fr)', visibility.right ? `${sizes.right}px` : null]
+    .filter(Boolean)
+    .join(' ');
+  return {
+    '--left-panel-width': `${sizes.left}px`,
+    '--right-panel-width': `${sizes.right}px`,
+    '--bottom-panel-height': `${sizes.bottom}px`,
+    '--workbench-columns': columns,
+  } as CSSProperties;
+}
+
+function clampPanelSizes(next: PanelSizes, visibility: PanelVisibility, shell: HTMLDivElement | null): PanelSizes {
+  const shellWidth = shell?.clientWidth ?? window.innerWidth;
+  const shellHeight = shell?.clientHeight ?? window.innerHeight;
+  const horizontalGutter = 0;
+  const bottomMaxByViewer = Math.max(PANEL_LIMITS.bottom.min, shellHeight - 52 - PANEL_LIMITS.viewer.minHeight);
+  const leftMaxByViewer = visibility.right ? shellWidth - PANEL_LIMITS.viewer.minWidth - next.right - horizontalGutter : shellWidth - PANEL_LIMITS.viewer.minWidth;
+  const rightMaxByViewer = visibility.left ? shellWidth - PANEL_LIMITS.viewer.minWidth - next.left - horizontalGutter : shellWidth - PANEL_LIMITS.viewer.minWidth;
+  const leftMax = Math.max(PANEL_LIMITS.left.min, Math.min(PANEL_LIMITS.left.max, leftMaxByViewer));
+  const rightMax = Math.max(PANEL_LIMITS.right.min, Math.min(PANEL_LIMITS.right.max, rightMaxByViewer));
+  return {
+    left: clamp(next.left, PANEL_LIMITS.left.min, leftMax),
+    right: clamp(next.right, PANEL_LIMITS.right.min, rightMax),
+    bottom: clamp(next.bottom, PANEL_LIMITS.bottom.min, Math.min(PANEL_LIMITS.bottom.max, bottomMaxByViewer)),
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 function restoreRuntimeScene(runtime: ReturnType<typeof createVtkRuntime>, scene: SceneState, datasets: Map<string, unknown>): void {

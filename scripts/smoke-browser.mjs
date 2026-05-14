@@ -40,7 +40,17 @@ try {
 
   const smokeResult = await evaluate(client, async () => {
     const byText = (text) => [...document.querySelectorAll('button, span, strong, div')].find((item) => item.textContent?.includes(text));
+    const byTitle = (title) => document.querySelector(`[title="${title}"]`);
+    const visibleCanvasMetrics = () => {
+      const canvas = document.querySelector('canvas');
+      if (!(canvas instanceof HTMLCanvasElement)) {
+        return { ok: false, width: 0, height: 0 };
+      }
+      const rect = canvas.getBoundingClientRect();
+      return { ok: rect.width > 200 && rect.height > 200 && canvas.width > 200 && canvas.height > 200, width: rect.width, height: rect.height, bufferWidth: canvas.width, bufferHeight: canvas.height };
+    };
     const hasCanvas = Boolean(document.querySelector('canvas'));
+    const canvasVisible = visibleCanvasMetrics();
     const hasSample = Boolean(byText('Blue titanium fan stage'));
     const textarea = document.querySelector('textarea');
     if (!textarea) {
@@ -56,10 +66,91 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 80));
     const hasTimeline = Boolean(byText('rotateMesh'));
     const hasStatus = Boolean(byText('已旋转 30 度'));
-    return { hasCanvas, hasSample, hasTimeline, hasStatus };
+
+    const workspaceSelect = document.querySelector('.workspace-select select');
+    if (!(workspaceSelect instanceof HTMLSelectElement)) {
+      throw new Error('Workspace select not found');
+    }
+    workspaceSelect.value = 'robotic-cell';
+    workspaceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const hasRobotSample = Boolean(byText('Robot base turntable'));
+    const robotCanvasVisible = visibleCanvasMetrics();
+
+    const selectButton = (name) => [...document.querySelectorAll('.object-select-button')].find((button) => button.textContent?.includes(name));
+    selectButton('Robot base turntable')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    selectButton('Robot shoulder joint')?.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const selectedRows = document.querySelectorAll('.object-row.selected').length;
+
+    byTitle('隐藏左侧对象树')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    byTitle('隐藏右侧检查器')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    byTitle('隐藏底部时间线')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const panelsHidden = !document.querySelector('.left-panel') && !document.querySelector('.right-panel') && !document.querySelector('.history-panel');
+    const restoreButton = (text) => [...document.querySelectorAll('.restore-panel-button')].find((button) => button.textContent?.includes(text));
+    const restoreButtonsVisible = Boolean(restoreButton('对象树') && restoreButton('检查器') && restoreButton('时间线'));
+
+    restoreButton('对象树')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    restoreButton('检查器')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    restoreButton('时间线')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const restoredFromCanvas = Boolean(document.querySelector('.left-panel') && document.querySelector('.right-panel') && document.querySelector('.history-panel'));
+
+    const leftPanelSlot = document.querySelector('.left-panel-slot');
+    const leftResizeHandle = document.querySelector('.left-panel-slot .resize-handle-right');
+    const beforeResizeWidth = leftPanelSlot?.getBoundingClientRect().width ?? 0;
+    leftResizeHandle?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: beforeResizeWidth, clientY: 120 }));
+    window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: beforeResizeWidth - 34, clientY: 120 }));
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: beforeResizeWidth - 34, clientY: 120 }));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const afterResizeWidth = leftPanelSlot?.getBoundingClientRect().width ?? 0;
+    const resizedLeftPanel = afterResizeWidth < beforeResizeWidth - 10;
+
+    const operationsTab = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('操作'));
+    operationsTab?.click();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const scaleInput = document.querySelector('input[aria-label="缩放比例"]');
+    if (!(scaleInput instanceof HTMLInputElement)) {
+      throw new Error('Scale input not found');
+    }
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    valueSetter?.call(scaleInput, '1.5');
+    scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    scaleInput.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const scaleButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('应用缩放'));
+    scaleButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const hasScaleStatus = Boolean(byText('已缩放对象到 1.50x'));
+
+    byTitle('显示左侧对象树')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    byTitle('显示右侧检查器')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    byTitle('显示底部时间线')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const panelsRestored = Boolean(document.querySelector('.left-panel') && document.querySelector('.right-panel') && document.querySelector('.history-panel'));
+
+    return { hasCanvas, canvasVisible, hasSample, hasTimeline, hasStatus, hasRobotSample, robotCanvasVisible, selectedRows, panelsHidden, restoreButtonsVisible, restoredFromCanvas, resizedLeftPanel, hasScaleStatus, panelsRestored };
   });
 
-  if (!smokeResult.hasCanvas || !smokeResult.hasSample || !smokeResult.hasTimeline || !smokeResult.hasStatus) {
+  if (
+    !smokeResult.hasCanvas
+    || !smokeResult.canvasVisible.ok
+    || !smokeResult.hasSample
+    || !smokeResult.hasTimeline
+    || !smokeResult.hasStatus
+    || !smokeResult.hasRobotSample
+    || !smokeResult.robotCanvasVisible.ok
+    || smokeResult.selectedRows < 2
+    || !smokeResult.panelsHidden
+    || !smokeResult.restoreButtonsVisible
+    || !smokeResult.restoredFromCanvas
+    || !smokeResult.resizedLeftPanel
+    || !smokeResult.hasScaleStatus
+    || !smokeResult.panelsRestored
+  ) {
     throw new Error(`Smoke checks failed: ${JSON.stringify(smokeResult)}`);
   }
 

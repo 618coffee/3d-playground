@@ -4,6 +4,7 @@ import { addVec3, cloneMeshEntity, type SceneState } from './scene';
 
 export type ViewerRuntimePort = {
   rotateMesh?: (meshId: string, axis: 'x' | 'y' | 'z' | Vec3, angleDeg: number) => void;
+  setMeshScale?: (meshId: string, scale: Vec3) => void;
   cloneMesh?: (sourceId: string, clone: MeshEntity) => void;
   previewClip?: (meshId: string, clip: VisualClip) => void;
   clearClip?: (meshId: string) => void;
@@ -111,6 +112,18 @@ function applyToScene(
       }
     });
     return { ...scene, meshes: [...scene.meshes, ...clones] };
+  }
+
+  if (command.type === 'setMeshScale') {
+    targetIds.forEach((meshId) => runtime?.setMeshScale?.(meshId, command.params.scale));
+    return {
+      ...scene,
+      meshes: scene.meshes.map((mesh) => (
+        targetIds.includes(mesh.id)
+          ? { ...mesh, transform: { ...mesh.transform, scale: [...command.params.scale] } }
+          : mesh
+      )),
+    };
   }
 
   if (command.type === 'selectMesh') {
@@ -239,6 +252,7 @@ function failed(actionId: string, message: string): ActionResult {
 function successMessage(command: OperationCommand): string {
   if (command.type === 'rotateMesh') return `已旋转 ${command.params.angleDeg} 度。`;
   if (command.type === 'cloneMesh') return `已复制 ${clampCloneCount(command.params.count)} 个对象。`;
+  if (command.type === 'setMeshScale') return `已缩放对象到 ${command.params.scale[0].toFixed(2)}x。`;
   if (command.type === 'selectMesh') return '已更新选择。';
   if (command.type === 'resetView') return '已重置视角。';
   if (command.type === 'clipMesh') return command.params.mode === 'clearVisualClip' ? '已清除视觉切割。' : '已应用视觉切割。';
@@ -295,6 +309,10 @@ function validateCommand(command: OperationCommand, scene: SceneState, targetIds
     if (scene.meshes.some((mesh) => mesh.id === command.params.mesh.id)) return '导入对象 ID 已存在。';
   }
   if (command.type === 'rotateMesh' && !Number.isFinite(command.params.angleDeg)) return '旋转角度无效。';
+  if (command.type === 'setMeshScale') {
+    if (!isValidVec3(command.params.scale)) return '缩放比例无效。';
+    if (command.params.scale.some((value) => value <= 0)) return '缩放比例必须大于 0。';
+  }
   if (command.type === 'cloneMesh' && !Number.isFinite(command.params.count)) return '复制数量无效。';
   if (command.type === 'clipMesh') {
     if (command.params.mode === 'bakeGeometry') return '当前 MVP 暂不支持真实几何切割，请使用视觉切割。';

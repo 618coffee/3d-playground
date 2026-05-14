@@ -64,6 +64,21 @@ export type ProceduralGeometry =
       opacity?: number;
     }
   | {
+      type: 'box';
+      size: Vec3;
+      center: Vec3;
+      rotationDeg?: Vec3;
+      opacity?: number;
+    }
+  | {
+      type: 'sphere';
+      radius: number;
+      center: Vec3;
+      thetaResolution: number;
+      phiResolution: number;
+      opacity?: number;
+    }
+  | {
       type: 'fanStage';
       bladeCount: number;
       radius: number;
@@ -105,6 +120,11 @@ export type OperationCommand =
         shareGeometry: boolean;
         namePattern: string;
       };
+    })
+  | (CommandMeta & {
+      type: 'setMeshScale';
+      target: MeshTarget;
+      params: { scale: Vec3 };
     })
   | (CommandMeta & {
       type: 'clipMesh';

@@ -4,8 +4,10 @@ import vtkActor from '@kitware/vtk.js/Rendering/Core/Actor';
 import vtkMapper from '@kitware/vtk.js/Rendering/Core/Mapper';
 import vtkPicker from '@kitware/vtk.js/Rendering/Core/Picker';
 import vtkGenericRenderWindow from '@kitware/vtk.js/Rendering/Misc/GenericRenderWindow';
+import vtkCubeSource from '@kitware/vtk.js/Filters/Sources/CubeSource';
 import vtkCylinderSource from '@kitware/vtk.js/Filters/Sources/CylinderSource';
 import vtkConeSource from '@kitware/vtk.js/Filters/Sources/ConeSource';
+import vtkSphereSource from '@kitware/vtk.js/Filters/Sources/SphereSource';
 import vtkPlane from '@kitware/vtk.js/Common/DataModel/Plane';
 import vtkSTLReader from '@kitware/vtk.js/IO/Geometry/STLReader';
 import vtkPLYReader from '@kitware/vtk.js/IO/Geometry/PLYReader';
@@ -36,6 +38,7 @@ export type VtkRuntime = {
   addMesh: (mesh: MeshEntity, dataset?: unknown) => void;
   clear: () => void;
   rotateMesh: (meshId: string, axis: 'x' | 'y' | 'z' | Vec3, angleDeg: number) => void;
+  setMeshScale: (meshId: string, scale: Vec3) => void;
   cloneMesh: (sourceId: string, clone: MeshEntity) => void;
   previewClip: (meshId: string, clip: VisualClip) => void;
   clearClip: (meshId: string) => void;
@@ -43,6 +46,7 @@ export type VtkRuntime = {
   selectMeshes: (meshIds: string[]) => void;
   setMeshVisibility: (meshId: string, visible: boolean) => void;
   setDisplayMode: (mode: DisplayMode) => void;
+  resize: () => void;
   onPick: (callback: (meshId: string) => void) => () => void;
   render: () => void;
   loadFile: (file: File) => Promise<LoadedMesh>;
@@ -75,7 +79,6 @@ export function createVtkRuntime(): VtkRuntime {
       pickSubscription = undefined;
       genericWindow?.delete();
       genericWindow = undefined;
-      records.clear();
     },
     addMesh(mesh, dataset) {
       const record = dataset ? createDatasetRecord(mesh, dataset) : createProceduralRecord(mesh);
@@ -107,6 +110,16 @@ export function createVtkRuntime(): VtkRuntime {
         if (axis === 'y') actor.rotateY(angleDeg);
         if (axis === 'z') actor.rotateZ(angleDeg);
       });
+      render();
+    },
+    setMeshScale(meshId, scale) {
+      const record = records.get(meshId);
+      if (!record) return;
+      record.actors.forEach((actor) => actor.setScale(...scale));
+      record.mesh = {
+        ...record.mesh,
+        transform: { ...record.mesh.transform, scale: [...scale] },
+      };
       render();
     },
     cloneMesh(sourceId, clone) {
@@ -189,6 +202,9 @@ export function createVtkRuntime(): VtkRuntime {
         });
       });
       render();
+    },
+    resize() {
+      genericWindow?.resize();
     },
     onPick(callback) {
       pickCallback = callback;
@@ -297,6 +313,29 @@ function actorsForGeometry(geometry: ProceduralGeometry, color: string, opacity:
       mappers.push(mapper);
     }
     return { actors, mappers };
+  }
+
+  if (geometry.type === 'box') {
+    const source = vtkCubeSource.newInstance({
+      center: geometry.center,
+      xLength: geometry.size[0],
+      yLength: geometry.size[1],
+      zLength: geometry.size[2],
+      rotations: geometry.rotationDeg ?? [0, 0, 0],
+    });
+    const { actor, mapper } = actorFromSource(source.getOutputData(), color, geometry.opacity ?? opacity);
+    return { actors: [actor], mappers: [mapper] };
+  }
+
+  if (geometry.type === 'sphere') {
+    const source = vtkSphereSource.newInstance({
+      radius: geometry.radius,
+      center: geometry.center,
+      thetaResolution: geometry.thetaResolution,
+      phiResolution: geometry.phiResolution,
+    });
+    const { actor, mapper } = actorFromSource(source.getOutputData(), color, geometry.opacity ?? opacity);
+    return { actors: [actor], mappers: [mapper] };
   }
 
   const source = geometry.type === 'cylinder'

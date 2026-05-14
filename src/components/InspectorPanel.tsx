@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Bot, Boxes, Check, SlidersHorizontal, X } from 'lucide-react';
+import { Bot, Boxes, Check, PanelRightClose, SlidersHorizontal, X } from 'lucide-react';
 import type { MeshEntity, OperationCommand } from '../domain/actions';
 import type { SceneState } from '../domain/scene';
 import { AgentPanel } from './AgentPanel';
@@ -7,25 +7,35 @@ import { AgentPanel } from './AgentPanel';
 type InspectorPanelProps = {
   scene: SceneState;
   selectedMesh?: MeshEntity;
+  selectedMeshes: MeshEntity[];
   pendingCommand: OperationCommand | null;
   onConfirmPending: () => void;
   onCancelPending: () => void;
   onExecute: (command: OperationCommand) => void;
+  onHidePanel?: () => void;
 };
 
-export function InspectorPanel({ scene, selectedMesh, pendingCommand, onConfirmPending, onCancelPending, onExecute }: InspectorPanelProps) {
+export function InspectorPanel({ scene, selectedMesh, selectedMeshes, pendingCommand, onConfirmPending, onCancelPending, onExecute, onHidePanel }: InspectorPanelProps) {
   const [tab, setTab] = useState<'properties' | 'operations' | 'agent'>('agent');
 
   return (
     <aside className="right-panel panel-shell">
+      <div className="inspector-header">
+        <strong>检查器</strong>
+        {onHidePanel ? (
+          <button type="button" className="icon-button panel-icon-button" onClick={onHidePanel} title="隐藏检查器" aria-label="隐藏检查器">
+            <PanelRightClose size={15} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
       <div className="tabs">
         <button className={tab === 'properties' ? 'active' : ''} onClick={() => setTab('properties')}><Boxes size={15} /> 属性</button>
         <button className={tab === 'operations' ? 'active' : ''} onClick={() => setTab('operations')}><SlidersHorizontal size={15} /> 操作</button>
         <button className={tab === 'agent' ? 'active' : ''} onClick={() => setTab('agent')}><Bot size={15} /> AI</button>
       </div>
       <PendingActionCard command={pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
-      {tab === 'properties' ? <PropertiesTab mesh={selectedMesh} /> : null}
-      {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} scene={scene} onExecute={onExecute} /> : null}
+      {tab === 'properties' ? <PropertiesTab mesh={selectedMesh} selectedMeshes={selectedMeshes} /> : null}
+      {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} selectedCount={selectedMeshes.length} scene={scene} onExecute={onExecute} /> : null}
       {tab === 'agent' ? <AgentPanel scene={scene} onExecute={onExecute} /> : null}
     </aside>
   );
@@ -48,7 +58,7 @@ function PendingActionCard({ command, onConfirm, onCancel }: { command: Operatio
   );
 }
 
-function PropertiesTab({ mesh }: { mesh?: MeshEntity }) {
+function PropertiesTab({ mesh, selectedMeshes }: { mesh?: MeshEntity; selectedMeshes: MeshEntity[] }) {
   if (!mesh) {
     return <div className="empty-panel roomy">请选择对象，或从对象树里点选一个 mesh。</div>;
   }
@@ -71,10 +81,17 @@ function PropertiesTab({ mesh }: { mesh?: MeshEntity }) {
       <div className="object-title-row">
         <span className="swatch large" style={{ background: mesh.color }} />
         <div>
-          <strong>{mesh.name}</strong>
+          <strong>{selectedMeshes.length > 1 ? `${selectedMeshes.length} 个对象已选中` : mesh.name}</strong>
           <span>{mesh.id}</span>
         </div>
       </div>
+      {selectedMeshes.length > 1 ? (
+        <div className="selection-summary">
+          {selectedMeshes.map((item) => (
+            <span key={item.id}>{item.name}</span>
+          ))}
+        </div>
+      ) : null}
       <div className="property-grid">
         {rows.map(([label, value]) => (
           <div className="property-row" key={label}>
@@ -87,11 +104,12 @@ function PropertiesTab({ mesh }: { mesh?: MeshEntity }) {
   );
 }
 
-function OperationsTab({ selectedMesh, scene, onExecute }: { selectedMesh?: MeshEntity; scene: SceneState; onExecute: (command: OperationCommand) => void }) {
+function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { selectedMesh?: MeshEntity; selectedCount: number; scene: SceneState; onExecute: (command: OperationCommand) => void }) {
   const [angle, setAngle] = useState(30);
   const [cloneCount, setCloneCount] = useState(2);
   const [cloneAxis, setCloneAxis] = useState<'x' | 'y' | 'z'>('x');
   const [cloneDistance, setCloneDistance] = useState(18);
+  const [scaleRatio, setScaleRatio] = useState(1);
   const [clipAxis, setClipAxis] = useState<'x' | 'y' | 'z'>('x');
   const [clipOrigin, setClipOrigin] = useState(0);
   const [keepSide, setKeepSide] = useState<'positive' | 'negative'>('positive');
@@ -101,7 +119,7 @@ function OperationsTab({ selectedMesh, scene, onExecute }: { selectedMesh?: Mesh
   return (
     <div className="panel-body stacked">
       <section className="tool-section">
-        <div className="section-title">旋转</div>
+        <div className="section-title">旋转 <span>{selectedCount || 0} selected</span></div>
         <label className="field-row">
           <span>角度</span>
           <input type="number" value={angle} onChange={(event) => setAngle(Number(event.target.value))} />
@@ -134,6 +152,34 @@ function OperationsTab({ selectedMesh, scene, onExecute }: { selectedMesh?: Mesh
         </label>
         <button disabled={disabled} onClick={() => onExecute({ id: `ui-clone-${Date.now()}`, type: 'cloneMesh', target, params: { count: cloneCount, offset: axisVector(cloneAxis, cloneDistance), unit: scene.unit, shareGeometry: true, namePattern: '{name}-copy-{n}' }, source: 'ui' })}>
           复制对象
+        </button>
+      </section>
+      <section className="tool-section">
+        <div className="section-title">缩放 <span>{formatScaleLabel(selectedMesh)}</span></div>
+        <label className="field-row scale-row">
+          <span>比例</span>
+          <input
+            type="range"
+            min={0.1}
+            max={4}
+            step={0.05}
+            value={scaleRatio}
+            disabled={disabled}
+            onChange={(event) => setScaleRatio(Number(event.target.value))}
+          />
+          <input
+            type="number"
+            min={0.1}
+            max={4}
+            step={0.05}
+            value={scaleRatio}
+            disabled={disabled}
+            aria-label="缩放比例"
+            onChange={(event) => setScaleRatio(clampScale(Number(event.target.value)))}
+          />
+        </label>
+        <button disabled={disabled} onClick={() => onExecute({ id: `ui-scale-${Date.now()}`, type: 'setMeshScale', target, params: { scale: [scaleRatio, scaleRatio, scaleRatio] }, source: 'ui' })}>
+          应用缩放
         </button>
       </section>
       <section className="tool-section">
@@ -171,6 +217,16 @@ function OperationsTab({ selectedMesh, scene, onExecute }: { selectedMesh?: Mesh
       </section>
     </div>
   );
+}
+
+function formatScaleLabel(mesh?: MeshEntity): string {
+  if (!mesh) return '0 selected';
+  return `${mesh.transform.scale[0].toFixed(2)} x`;
+}
+
+function clampScale(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(4, Math.max(0.1, value));
 }
 
 function axisVector(axis: 'x' | 'y' | 'z', value: number): [number, number, number] {

@@ -1,17 +1,25 @@
-import { Clock, RotateCcw } from 'lucide-react';
+import { Clock, PanelBottomClose, RotateCcw } from 'lucide-react';
 import type { HistoryEntry } from '../domain/history';
 
 type HistoryTimelineProps = {
   entries: HistoryEntry[];
   lastMessage?: string;
+  onHidePanel?: () => void;
 };
 
-export function HistoryTimeline({ entries, lastMessage }: HistoryTimelineProps) {
+export function HistoryTimeline({ entries, lastMessage, onHidePanel }: HistoryTimelineProps) {
   return (
     <footer className="history-panel">
       <div className="history-header">
         <strong>操作时间线</strong>
-        <span>{lastMessage ?? '等待操作'}</span>
+        <div className="history-header-actions">
+          <span>{lastMessage ?? '等待操作'}</span>
+          {onHidePanel ? (
+            <button type="button" className="icon-button panel-icon-button" onClick={onHidePanel} title="隐藏时间线" aria-label="隐藏时间线">
+              <PanelBottomClose size={15} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="history-list">
         {entries.length === 0 ? (

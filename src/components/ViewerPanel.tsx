@@ -17,9 +17,18 @@ export function ViewerPanel({ runtime, meshCount, selectedName, displayMode, onD
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    runtime.mount(containerRef.current);
-    return () => runtime.dispose();
+    const container = containerRef.current;
+    if (!container) return;
+    runtime.mount(container);
+    const resize = () => runtime.resize();
+    const frame = window.requestAnimationFrame(resize);
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      runtime.dispose();
+    };
   }, [runtime]);
 
   return (
