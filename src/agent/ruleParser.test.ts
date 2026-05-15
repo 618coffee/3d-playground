@@ -154,6 +154,21 @@ describe('rule parser', () => {
     expect(result.requiresConfirmation).toBe(true);
   });
 
+  it('parses axis-pair plane clips across the whole visible model', () => {
+    const result = parser.parse('沿x,z平面切开整个模型，保留y轴正坐标部分', scene);
+
+    expect(result.kind).toBe('action');
+    if (result.kind !== 'action') return;
+    expect(result.action.type).toBe('clipMesh');
+    expect(result.action.target).toEqual({ source: 'allVisible' });
+    expect(result.action.params).toMatchObject({
+      plane: { origin: [0, 0, 0], normal: [0, 1, 0] },
+      keepSide: 'positive',
+      mode: 'preview',
+    });
+    expect(result.requiresConfirmation).toBe(true);
+  });
+
   it('parses English clip side and origin for a named target', () => {
     const result = parser.parse('clip fan-stage along z at -5 keep lower side', scene);
 

@@ -107,6 +107,10 @@ export default function App() {
     if (pendingCommand?.source === 'agent' && isRuntimePreviewCommand(pendingCommand)) {
       restoreRuntimeScene(runtime, historyRef.current.current(), datasetsRef.current);
     }
+    if (command.type === 'clipMesh') {
+      execute(command);
+      return;
+    }
     if (command.type !== 'cloneMesh') return;
     const sceneSnapshot = historyRef.current.current();
     const targetIds = pendingCommandTargetIds(command, sceneSnapshot);
@@ -114,7 +118,7 @@ export default function App() {
     previewCloneDraft(runtime, sceneSnapshot, targetIds, command);
     setPendingCommand(command);
     setLastMessage('已生成复制预览，确认后写入历史。');
-  }, [pendingCommand, runtime]);
+  }, [execute, pendingCommand, runtime]);
 
   const importFile = useCallback(async (file: File) => {
     try {

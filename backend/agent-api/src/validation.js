@@ -44,6 +44,9 @@ export function validateAgentResponse(input, request) {
   }
 
   if (kind === 'clarification') {
+    const viewerClipDraft = normalizeSimpleGeometryCutDraft(request);
+    if (viewerClipDraft) return viewerClipDraft;
+
     return {
       kind,
       question: requiredString(response.question, 'question', 1000),
@@ -71,11 +74,15 @@ export function validateAgentResponse(input, request) {
   }
 
   if (kind === 'backendJobDraft') {
+    const jobKind = enumValue(response.jobKind, ['geometryCut', 'meshing', 'solverRun', 'resultSummary'], 'jobKind');
+    const viewerClipDraft = jobKind === 'geometryCut' ? normalizeSimpleGeometryCutDraft(request) : undefined;
+    if (viewerClipDraft) return viewerClipDraft;
+
     return {
       kind,
       title: requiredString(response.title, 'title', 300),
       description: requiredString(response.description, 'description', 2000),
-      jobKind: enumValue(response.jobKind, ['geometryCut', 'meshing', 'solverRun', 'resultSummary'], 'jobKind'),
+      jobKind,
       risk: normalizeActionRisk(response.risk, [], { fallbackLevel: 'high', fallbackWarnings: ['需要未来本地后端 worker 执行。'] }),
     };
   }
@@ -427,6 +434,114 @@ function commandTitle(command) {
   if (command.type === 'setMeshVisibility') return 'Set visibility';
   if (command.type === 'setMeshLocked') return 'Set lock state';
   return command.type;
+}
+
+function normalizeSimpleGeometryCutDraft(request) {
+  const command = inferViewerClipCommand(request);
+  if (!command) return undefined;
+  const action = validateOperationCommand(command, request);
+  return {
+    kind: 'actionDraft',
+    action,
+    explanation: 'Converted a plane cut request into a viewer visual clipping draft.',
+    confidence: 0.78,
+    risk: normalizeActionRisk(undefined, [action]),
+  };
+}
+
+function inferViewerClipCommand(request) {
+  const text = request.text ?? '';
+  if (!/(切|裁剪|剖|clip|cut|section|slice)/i.test(text)) return undefined;
+  if (/(真实|永久|布尔|烘焙|导出|实体|拓扑|boolean|bake|baked|permanent|export|remesh)/i.test(text)) return undefined;
+
+  const axis = parseClipAxis(text);
+  if (!axis) return undefined;
+  const target = inferClipTarget(text, request);
+  if (!target) return undefined;
+  const origin = parsePlaneOrigin(text) ?? 0;
+
+  return {
+    id: createCommandId('clipMesh'),
+    type: 'clipMesh',
+    target,
+    params: {
+      plane: { origin: originForAxis(axis, origin), normal: normalForAxis(axis) },
+      keepSide: parseKeepSide(text, axis),
+      mode: 'applyVisualClip',
+      cap: true,
+    },
+    source: 'agent',
+    rawText: request.text,
+    confirmed: false,
+  };
+}
+
+function inferClipTarget(text, request) {
+  if (/(整个|全部|所有|全体|全场景|全模型|全部可见|所有可见|entire|whole|all visible|all meshes|everything)/i.test(text)) {
+    return { source: 'allVisible' };
+  }
+  if (/(当前|选中|已选|所选|选择的|current|selected|selection)/i.test(text) && request.scene.selection.length > 0) {
+    return { source: 'selection' };
+  }
+  return request.scene.selection.length > 0 ? { source: 'selection' } : undefined;
+}
+
+function parseClipAxis(text) {
+  const pairAxis = parseAxisPairPlane(text);
+  if (pairAxis) return pairAxis;
+  const explicitAxis = text.match(/(?:^|[^A-Za-z0-9_-])([XYZxyz])\s*(?:-?\s*(?:轴|方向|=|平面|axis|direction|plane)|(?=$|[^A-Za-z0-9_-]))/i);
+  if (explicitAxis) return explicitAxis[1].toLowerCase();
+  if (/横向|左右|右|左|\bright\b|\bleft\b/i.test(text)) return 'x';
+  if (/前后|纵向|\bfront\b|\bback\b/i.test(text)) return 'y';
+  if (/上下|高度|\bup\b|\bdown\b|\btop\b|\bbottom\b|\bvertical\b/i.test(text)) return 'z';
+  return undefined;
+}
+
+function parseAxisPairPlane(text) {
+  const compact = text.toLowerCase().replace(/\s+/g, '');
+  if (/[x][,，/\\-]?[y](?:平面|面|plane)/i.test(compact)) return 'z';
+  if (/[x][,，/\\-]?[z](?:平面|面|plane)/i.test(compact)) return 'y';
+  if (/[y][,，/\\-]?[z](?:平面|面|plane)/i.test(compact)) return 'x';
+  return undefined;
+}
+
+function parsePlaneOrigin(text) {
+  const planeMatch = text.match(/[XYZxyz]\s*=\s*(-?\d+(?:\.\d+)?)/);
+  if (planeMatch) return Number(planeMatch[1]);
+  const atMatch = text.match(/\b(?:at|origin|through)\s*(-?\d+(?:\.\d+)?)/i);
+  if (atMatch) return Number(atMatch[1]);
+  const cnMatch = text.match(/(?:坐标|位置|原点)\s*(-?\d+(?:\.\d+)?)/);
+  return cnMatch ? Number(cnMatch[1]) : undefined;
+}
+
+function parseKeepSide(text, axis) {
+  if (/(positive|正侧|正半|正坐标|正方向|正向|保留.*正)/i.test(text)) return 'positive';
+  if (/(negative|负侧|负半|负坐标|负方向|负向|保留.*负)/i.test(text)) return 'negative';
+  if (axis === 'x') {
+    if (/(右|\bright\b)/i.test(text)) return 'positive';
+    if (/(左|\bleft\b)/i.test(text)) return 'negative';
+  }
+  if (axis === 'y') {
+    if (/(前|\bfront\b)/i.test(text)) return 'positive';
+    if (/(后|\bback\b)/i.test(text)) return 'negative';
+  }
+  if (axis === 'z') {
+    if (/(上|\bup\b|\bupper\b|\btop\b|\babove\b)/i.test(text)) return 'positive';
+    if (/(下|\bdown\b|\blower\b|\bbottom\b|\bbelow\b)/i.test(text)) return 'negative';
+  }
+  return 'positive';
+}
+
+function originForAxis(axis, value) {
+  if (axis === 'x') return [value, 0, 0];
+  if (axis === 'y') return [0, value, 0];
+  return [0, 0, value];
+}
+
+function normalForAxis(axis) {
+  if (axis === 'x') return [1, 0, 0];
+  if (axis === 'y') return [0, 1, 0];
+  return [0, 0, 1];
 }
 
 function unwrapResponse(input) {

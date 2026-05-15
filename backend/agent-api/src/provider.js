@@ -108,7 +108,10 @@ function systemPrompt() {
     'OperationCommand must be a flat object with type, target, params, source, rawText, and confirmed fields.',
     'Do not return common/commands wrapper objects for OperationCommand.',
     'Use only mesh ids from the scene context. Ask for clarification when target or parameters are ambiguous.',
-    'For true geometry edits, meshing, solver runs, or result extraction, return backendJobDraft instead of OperationCommand.',
+    'For plane clip, cut, section, or slice requests that can be represented by a clipping plane, return actionDraft with clipMesh and mode applyVisualClip, not backendJobDraft.',
+    'Map XY plane to normal [0,0,1], XZ plane to normal [0,1,0], and YZ plane to normal [1,0,0]. Phrases like whole model, entire model, 全部, 所有, or 整个模型 should target { source: "allVisible" }.',
+    'Do not ask whether to use visual clipping or permanent geometry for simple plane clips; default to reversible visual clipping with cap true.',
+    'Only return backendJobDraft for explicitly permanent, baked, boolean, exported, meshed, solver, or result-extraction work.',
   ].join(' ');
 }
 

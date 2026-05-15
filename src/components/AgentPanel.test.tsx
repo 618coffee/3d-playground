@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentPanel } from './AgentPanel';
 import { createInitialScene } from '../domain/scene';
+import type { ActionResult } from '../domain/actions';
 import type { AgentResponse } from '../domain/protocol';
 
 const actionDraft: AgentResponse = {
@@ -134,5 +135,81 @@ describe('AgentPanel', () => {
 
     expect(previewDraft).toHaveBeenCalledWith(cloneDraft.action);
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('routes an active pending draft button to pending confirmation', async () => {
+    const execute = vi.fn();
+    const confirmPending = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(cloneDraft), { status: 200 })));
+
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        historyEntries={[]}
+        pendingCommand={cloneDraft.action}
+        onExecute={execute}
+        onConfirmPending={confirmPending}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /确认应用/ }));
+
+    expect(confirmPending).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('clears a draft after its pending command is resolved outside the panel', async () => {
+    const execute = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(cloneDraft), { status: 200 })));
+
+    const { rerender } = render(
+      <AgentPanel
+        scene={createInitialScene()}
+        historyEntries={[]}
+        pendingCommand={cloneDraft.action}
+        onExecute={execute}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    expect(await screen.findByRole('button', { name: /确认应用/ })).toBeInTheDocument();
+
+    rerender(
+      <AgentPanel
+        scene={createInitialScene()}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={execute}
+      />,
+    );
+
+    expect(await screen.findByText('暂无操作草稿。')).toBeInTheDocument();
+  });
+
+  it('clears an immediately applied action draft', async () => {
+    const execute = vi.fn((): ActionResult => ({
+      actionId: actionDraft.action.id,
+      status: 'applied',
+      message: '已重置视角。',
+      affectedMeshIds: [],
+      requiresConfirmation: false,
+      warnings: [],
+    }));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(actionDraft), { status: 200 })));
+
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={execute}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /确认执行/ }));
+
+    expect(await screen.findByText('暂无操作草稿。')).toBeInTheDocument();
   });
 });

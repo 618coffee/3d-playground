@@ -169,6 +169,9 @@ function displayModeAction(request, mode) {
 
 function inferTarget(request, options = {}) {
   const text = request.text.toLowerCase();
+  if (/(整个|全部|所有|全体|全场景|全模型|全部可见|所有可见|entire|whole|all visible|all meshes|everything)/i.test(request.text)) {
+    return { source: 'allVisible' };
+  }
   if (/(当前|选中|selected|selection)/i.test(request.text) && request.scene.selection.length > 0) return { source: 'selection' };
 
   const exact = request.scene.meshes.find((mesh) => text.includes(mesh.id.toLowerCase()) || text.includes(mesh.name.toLowerCase()));
@@ -228,11 +231,22 @@ function explainAction(action) {
 }
 
 function inferAxis(text) {
+  const planeNormalAxis = inferAxisPairPlane(text);
+  if (planeNormalAxis) return planeNormalAxis;
+
   const match = text.match(/[XYZxyz]\s*(轴|方向|=|plane|axis)?/);
   if (match) return match[0][0].toLowerCase();
   if (/左|右|left|right/i.test(text)) return 'x';
   if (/前|后|front|back/i.test(text)) return 'y';
   if (/上|下|top|bottom|up|down/i.test(text)) return 'z';
+  return undefined;
+}
+
+function inferAxisPairPlane(text) {
+  const compact = text.toLowerCase().replace(/\s+/g, '');
+  if (/[x][,，/\\-]?[y](?:平面|面|plane)/i.test(compact)) return 'z';
+  if (/[x][,，/\\-]?[z](?:平面|面|plane)/i.test(compact)) return 'y';
+  if (/[y][,，/\\-]?[z](?:平面|面|plane)/i.test(compact)) return 'x';
   return undefined;
 }
 

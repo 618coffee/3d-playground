@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Play, RotateCcw, Send, Sparkles, Square, X } from 'lucide-react';
 import { buildAgentContext } from '../agent/context';
 import { createLlmAgentClient, createRuleParserAdapter } from '../agent/adapters';
@@ -13,6 +13,7 @@ type AgentPanelProps = {
   historyEntries: HistoryEntry[];
   pendingCommand: OperationCommand | null;
   onExecute: (command: OperationCommand) => ActionResult;
+  onConfirmPending?: () => void;
   onCancelPending?: () => void;
   onPreviewDraft?: (command: OperationCommand) => void;
 };
@@ -27,7 +28,7 @@ const examples = [
   '重置视角',
 ];
 
-export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, onCancelPending, onPreviewDraft }: AgentPanelProps) {
+export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, onConfirmPending, onCancelPending, onPreviewDraft }: AgentPanelProps) {
   const fallbackAdapter = useMemo(() => createRuleParserAdapter(), []);
   const adapter = useMemo(() => createAgentAdapter(fallbackAdapter), [fallbackAdapter]);
   const [text, setText] = useState(examples[0]);
@@ -39,6 +40,21 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
   const [debugOpen, setDebugOpen] = useState(false);
   const [planStatuses, setPlanStatuses] = useState<Record<string, PlanStepStatus>>({});
   const abortRef = useRef<AbortController | null>(null);
+  const lastPendingActionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (pendingCommand?.source === 'agent') {
+      lastPendingActionIdRef.current = pendingCommand.id;
+      return;
+    }
+
+    if (response?.kind === 'actionDraft' && lastPendingActionIdRef.current === response.action.id) {
+      setResponse(null);
+      setDebugOpen(false);
+      setPlanStatuses({});
+      lastPendingActionIdRef.current = null;
+    }
+  }, [pendingCommand, response]);
 
   const sendRequest = async (input = text) => {
     const prompt = input.trim();
@@ -109,6 +125,11 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
   const executeDraft = (command: OperationCommand) => {
     const result = onExecute(command);
     setConversation((current) => [...current, createTurn('tool', result.message)]);
+    if (!result.requiresConfirmation && (result.status === 'applied' || result.status === 'rejected')) {
+      setResponse(null);
+      setDebugOpen(false);
+      setPlanStatuses({});
+    }
   };
 
   const executePlan = (steps: AgentPlanStep[]) => {
@@ -181,7 +202,9 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
         onToggleDebug={() => setDebugOpen((open) => !open)}
         onDiscardDraft={discardDraft}
         onExecuteDraft={executeDraft}
+        onConfirmPending={onConfirmPending}
         onExecutePlan={executePlan}
+        pendingCommand={pendingCommand}
       />
 
     </div>
@@ -225,7 +248,9 @@ function AgentResponseView({
   onToggleDebug,
   onDiscardDraft,
   onExecuteDraft,
+  onConfirmPending,
   onExecutePlan,
+  pendingCommand,
 }: {
   response: AgentResponse | null;
   debugOpen: boolean;
@@ -233,7 +258,9 @@ function AgentResponseView({
   onToggleDebug: () => void;
   onDiscardDraft: () => void;
   onExecuteDraft: (command: OperationCommand) => void;
+  onConfirmPending?: () => void;
   onExecutePlan: (steps: AgentPlanStep[]) => void;
+  pendingCommand: OperationCommand | null;
 }) {
   if (!response) {
     return <div className="agent-empty-state empty-panel roomy">暂无操作草稿。</div>;
@@ -380,6 +407,7 @@ function AgentResponseView({
   }
 
   const summaryRows = buildActionSummary(response.action);
+  const pendingMatchesDraft = pendingCommand?.source === 'agent' && pendingCommand.id === response.action.id;
 
   return (
     <section className="agent-review-card parse-card">
@@ -407,8 +435,8 @@ function AgentResponseView({
         <button onClick={onToggleDebug} aria-expanded={debugOpen}>
           {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} JSON
         </button>
-        <button className="primary-button" onClick={() => onExecuteDraft(response.action)}>
-          <Sparkles size={15} /> 确认执行
+        <button className="primary-button" onClick={() => (pendingMatchesDraft ? onConfirmPending?.() : onExecuteDraft(response.action))} disabled={pendingMatchesDraft && !onConfirmPending}>
+          {pendingMatchesDraft ? <Check size={15} /> : <Sparkles size={15} />} {pendingMatchesDraft ? '确认应用' : '确认执行'}
         </button>
       </div>
       {debugOpen ? <DebugDrawer payload={response} /> : null}

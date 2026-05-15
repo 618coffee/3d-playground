@@ -39,7 +39,7 @@ export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEnt
       <PendingActionCard command={pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
       {tab === 'properties' ? <PropertiesTab mesh={selectedMesh} selectedMeshes={selectedMeshes} /> : null}
       {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} selectedCount={selectedMeshes.length} scene={scene} onExecute={onExecute} /> : null}
-      {tab === 'agent' ? <AgentPanel scene={scene} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
+      {tab === 'agent' ? <AgentPanel scene={scene} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onConfirmPending={onConfirmPending} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
     </aside>
   );
 }
@@ -54,7 +54,7 @@ function PendingActionCard({ command, onConfirm, onCancel }: { command: Operatio
         <span>{pendingDescription(command)}</span>
       </div>
       <div className="button-row no-wrap">
-        <button className="primary-button" onClick={onConfirm}><Check size={14} /> 确认</button>
+        <button className="primary-button" onClick={onConfirm}><Check size={14} /> {pendingConfirmLabel(command)}</button>
         <button onClick={onCancel}><X size={14} /> 取消</button>
       </div>
     </div>
@@ -217,4 +217,10 @@ function pendingDescription(command: OperationCommand): string {
   if (command.type === 'clipMesh') return '预览已经显示在视窗中，确认后写入历史，取消会恢复当前场景。';
   if (command.type === 'cloneMesh') return `将复制 ${command.params.count} 个对象。`;
   return command.type;
+}
+
+function pendingConfirmLabel(command: OperationCommand): string {
+  if (command.type === 'clipMesh') return '确认应用';
+  if (command.type === 'cloneMesh') return '确认复制';
+  return '确认';
 }

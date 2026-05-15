@@ -155,6 +155,10 @@ function isSelectCommand(text: string): boolean {
 }
 
 function resolveTarget(text: string, scene: SceneState, command: ParserCommand): MeshTarget | undefined {
+  if (referencesAllVisible(text)) {
+    return { source: 'allVisible' };
+  }
+
   const targetName = extractTargetName(text, command);
   if (targetName) {
     if (referencesSelection(targetName)) {
@@ -215,11 +219,15 @@ function stripCloneDetails(text: string): string {
 
 function stripClipDetails(text: string): string {
   return text
+    .replace(/沿?\s*[XYZxyz]\s*[,，/\\-]?\s*[XYZxyz]\s*(平面|面|plane)/gi, ' ')
+    .replace(/[XYZxyz]{2}\s*(平面|面|plane)/gi, ' ')
     .replace(/沿\s*[XYZxyz]\s*=\s*-?\d+(?:\.\d+)?\s*(平面|面)?/gi, ' ')
     .replace(/[XYZxyz]\s*=\s*-?\d+(?:\.\d+)?/gi, ' ')
     .replace(/\b(?:at|on|through|along)\s+(?:the\s+)?[XYZxyz]\s*(?:-?\s*(?:axis|plane))?\s+(?:at|origin)\s+-?\d+(?:\.\d+)?\b/gi, ' ')
     .replace(/\b(?:at|on|through|along)\s+(?:the\s+)?[XYZxyz]\s*(?:-?\s*(?:axis|plane))?\b/gi, ' ')
     .replace(/\b(?:keep|retain)\s+(?:the\s+)?(?:positive|negative|left|right|upper|lower|top|bottom|front|back|above|below)(?:\s+side)?\b/gi, ' ')
+    .replace(/[XYZxyz]\s*轴\s*(正|负)\s*(坐标|方向)?\s*(部分|一侧|侧)?/g, ' ')
+    .replace(/(正|负)\s*(坐标|方向)\s*(部分|一侧|侧)?/g, ' ')
     .replace(/(只?保留|留下)?\s*(左|右|上|下|前|后|正|负)\s*(半边|一侧|侧)?/g, ' ')
     .replace(/\b(?:plane|side|keep|retain|at|origin|through)\b/gi, ' ')
     .replace(/[XYZxyz]\s*(轴|方向|平面|面)/g, ' ');
@@ -243,6 +251,10 @@ function referencesSelection(text: string): boolean {
   return /(当前|选中|已选|所选|选择的|current|selected|selection)/i.test(text) || /选择(对象|网格|模型)/.test(text);
 }
 
+function referencesAllVisible(text: string): boolean {
+  return /(整个|全部|所有|全体|全场景|全模型|全部可见|所有可见|entire|whole|all visible|all meshes|everything)/i.test(text);
+}
+
 function targetFromName(name: string, scene: SceneState): MeshTarget {
   const exact = scene.meshes.find((mesh) => sameText(mesh.id, name) || sameText(mesh.name, name));
   if (exact) return { meshId: exact.id };
@@ -262,6 +274,9 @@ function containsText(haystack: string, needle: string): boolean {
 }
 
 function parseAxis(text: string): 'x' | 'y' | 'z' | undefined {
+  const planeNormalAxis = parseAxisPairPlane(text);
+  if (planeNormalAxis) return planeNormalAxis;
+
   const explicitAxis = text.match(/(?:^|[^A-Za-z0-9_-])([XYZxyz])\s*(?:-?\s*(?:轴|方向|=|平面|axis|direction|plane)|(?=$|[^A-Za-z0-9_-]))/i);
   if (explicitAxis) {
     return axisMap[explicitAxis[1]];
@@ -269,6 +284,14 @@ function parseAxis(text: string): 'x' | 'y' | 'z' | undefined {
   if (/横向|左右|右|左|\bright\b|\bleft\b/i.test(text)) return 'x';
   if (/前后|纵向|\bfront\b|\bback\b/i.test(text)) return 'y';
   if (/上下|高度|\bup\b|\bdown\b|\btop\b|\bbottom\b|\bvertical\b/i.test(text)) return 'z';
+  return undefined;
+}
+
+function parseAxisPairPlane(text: string): 'x' | 'y' | 'z' | undefined {
+  const compact = text.toLowerCase().replace(/\s+/g, '');
+  if (/[x][,，/\\-]?[y](?:平面|面|plane)/i.test(compact)) return 'z';
+  if (/[x][,，/\\-]?[z](?:平面|面|plane)/i.test(compact)) return 'y';
+  if (/[y][,，/\\-]?[z](?:平面|面|plane)/i.test(compact)) return 'x';
   return undefined;
 }
 
@@ -312,8 +335,8 @@ function parsePlaneOrigin(text: string): number | undefined {
 }
 
 function parseKeepSide(text: string, axis: 'x' | 'y' | 'z'): 'positive' | 'negative' {
-  if (/(positive|正侧|正半|保留正)/i.test(text)) return 'positive';
-  if (/(negative|负侧|负半|保留负)/i.test(text)) return 'negative';
+  if (/(positive|正侧|正半|正坐标|正方向|正向|保留.*正)/i.test(text)) return 'positive';
+  if (/(negative|负侧|负半|负坐标|负方向|负向|保留.*负)/i.test(text)) return 'negative';
 
   if (axis === 'x') {
     if (/(右|\bright\b)/i.test(text)) return 'positive';
