@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRuleParserAdapter, parseResultToAgentResponse } from './adapters';
+import { createLlmAgentClient, createRuleParserAdapter, parseResultToAgentResponse } from './adapters';
 import type { AgentParseResult } from './types';
 import type { SceneState } from '../domain/scene';
 
@@ -25,6 +25,12 @@ const scene: SceneState = {
 };
 
 describe('agent adapters', () => {
+  it('labels the LLM client as an API connection rather than a local model', () => {
+    const adapter = createLlmAgentClient({ endpoint: '/api/agent/respond' });
+
+    expect(adapter.label).toBe('LLM API');
+  });
+
   it('wraps the local rule parser behind the async agent contract', async () => {
     const adapter = createRuleParserAdapter();
 

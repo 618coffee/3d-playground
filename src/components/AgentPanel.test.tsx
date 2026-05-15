@@ -53,6 +53,21 @@ describe('AgentPanel', () => {
     vi.restoreAllMocks();
   });
 
+  it('shows the LLM API label only in the prompt header without a footer frame', () => {
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('LLM API')).toBeInTheDocument();
+    expect(screen.queryByText(/LLM API 已就绪/)).not.toBeInTheDocument();
+    expect(document.querySelector('.agent-status-footer')).not.toBeInTheDocument();
+  });
+
   it('lets users discard an action draft without executing it', async () => {
     const execute = vi.fn();
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(actionDraft), { status: 200 })));

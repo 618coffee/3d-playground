@@ -21,7 +21,7 @@ export function createRuleParserAdapter(): AgentAdapter {
 export function createLlmAgentClient(options: { endpoint: string }): AgentAdapter {
   return {
     id: 'local-llm',
-    label: 'Local LLM',
+    label: 'LLM API',
     async respond(request, respondOptions) {
       const response = await fetch(options.endpoint, {
         method: 'POST',

@@ -799,8 +799,7 @@ label input[type='file'] {
 
 .agent-prompt-card,
 .agent-review-card,
-.agent-conversation-feed,
-.agent-status-footer {
+.agent-conversation-feed {
   border: 1px solid #273341;
   border-radius: 8px;
   background: #101720;
@@ -815,7 +814,6 @@ label input[type='file'] {
 
 .agent-prompt-label,
 .agent-review-head,
-.agent-status-footer,
 .agent-review-actions {
   display: flex;
   align-items: center;
@@ -1060,33 +1058,6 @@ label input[type='file'] {
   margin: 0;
 }
 
-.agent-status-footer {
-  min-height: 34px;
-  padding: 7px 10px;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  color: #95a9bd;
-  font-size: 12px;
-}
-
-.agent-status-footer span:last-child {
-  margin-left: auto;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #63d0a6;
-  box-shadow: 0 0 0 3px rgba(99, 208, 166, 0.12);
-}
-
-.agent-status-footer.is-loading .status-dot {
-  background: #d8b663;
-  box-shadow: 0 0 0 3px rgba(216, 182, 99, 0.14);
-}
-
-.agent-status-footer.has-error .status-dot,
 .agent-review-card.blocked .review-kicker {
   color: #f0b2b2;
   border-color: #724040;

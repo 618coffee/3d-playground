@@ -184,11 +184,6 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
         onExecutePlan={executePlan}
       />
 
-      <footer className={`agent-status-footer ${status === 'loading' ? 'is-loading' : ''} ${status === 'error' ? 'has-error' : ''}`}>
-        <span className="status-dot" aria-hidden="true" />
-        <span>{statusLabel(status, adapter.label)}</span>
-        <span>{scene.meshes.length} 个对象</span>
-      </footer>
     </div>
   );
 }
@@ -465,14 +460,6 @@ function conversationSummary(response: AgentResponse) {
   if (response.kind === 'sceneAnswer') return response.answer;
   if (response.kind === 'backendJobDraft') return `后端作业草稿: ${response.title}`;
   return `${commandTitle(response.action)} 已生成，确认前请检查参数。`;
-}
-
-function statusLabel(status: AgentStatus, adapterLabel: string): string {
-  if (status === 'loading') return `${adapterLabel} 正在响应`;
-  if (status === 'error') return `${adapterLabel} 出错`;
-  if (status === 'cancelled') return '请求已取消';
-  if (status === 'ready') return `${adapterLabel} 已返回草案`;
-  return `${adapterLabel} 已就绪`;
 }
 
 function statusGlyph(status: PlanStepStatus | undefined, fallback: number): string {
