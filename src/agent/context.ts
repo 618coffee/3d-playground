@@ -44,6 +44,8 @@ export type AgentContext = {
 export type AgentMeshContext = {
   id: string;
   name: string;
+  color: string;
+  colorLabel: string;
   visible: boolean;
   locked: boolean;
   source: MeshEntity['sourceFormat'];
@@ -96,6 +98,8 @@ function summarizeMesh(mesh: MeshEntity): AgentMeshContext {
   return {
     id: mesh.id,
     name: mesh.name,
+    color: normalizeHexColor(mesh.color) ?? mesh.color,
+    colorLabel: colorLabelForHex(normalizeHexColor(mesh.color) ?? mesh.color),
     visible: mesh.visible,
     locked: mesh.locked,
     source: mesh.sourceFormat,
@@ -108,6 +112,39 @@ function summarizeMesh(mesh: MeshEntity): AgentMeshContext {
     },
     clipping: summarizeClipping(mesh.clipping),
   };
+}
+
+function normalizeHexColor(value: string): string | undefined {
+  const match = value.trim().match(/^#?([0-9a-f]{6})$/i);
+  return match ? `#${match[1].toLowerCase()}` : undefined;
+}
+
+function colorLabelForHex(hex: string): string {
+  const normalized = normalizeHexColor(hex);
+  if (!normalized) return 'unknown';
+  const red = Number.parseInt(normalized.slice(1, 3), 16) / 255;
+  const green = Number.parseInt(normalized.slice(3, 5), 16) / 255;
+  const blue = Number.parseInt(normalized.slice(5, 7), 16) / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+  if (delta < 0.08) return lightness < 0.35 ? 'black' : lightness > 0.75 ? 'white' : 'gray';
+  let hue: number;
+  if (max === red) hue = ((green - blue) / delta) % 6;
+  else if (max === green) hue = (blue - red) / delta + 2;
+  else hue = (red - green) / delta + 4;
+  const degrees = (hue * 60 + 360) % 360;
+  if (degrees < 15 || degrees >= 345) return 'red';
+  if (degrees < 36) return 'orange';
+  if (degrees < 55) return 'gold';
+  if (degrees < 75) return 'yellow';
+  if (degrees < 165) return 'green';
+  if (degrees < 195) return 'cyan';
+  if (degrees < 255) return 'blue';
+  if (degrees < 285) return 'purple';
+  if (degrees < 345) return 'magenta';
+  return 'gray';
 }
 
 function summarizeStats(stats: MeshEntity['stats']): AgentMeshContext['stats'] {

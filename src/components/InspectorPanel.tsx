@@ -39,7 +39,7 @@ export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEnt
       <PendingActionCard command={pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
       {tab === 'properties' ? <PropertiesTab mesh={selectedMesh} selectedMeshes={selectedMeshes} /> : null}
       {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} selectedCount={selectedMeshes.length} scene={scene} onExecute={onExecute} /> : null}
-      {tab === 'agent' ? <AgentPanel scene={scene} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onConfirmPending={onConfirmPending} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
+      {tab === 'agent' ? <AgentPanel scene={scene} selectedMeshes={selectedMeshes} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onConfirmPending={onConfirmPending} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
     </aside>
   );
 }
@@ -210,17 +210,22 @@ function normalForAxis(axis: 'x' | 'y' | 'z'): [number, number, number] {
 function pendingTitle(command: OperationCommand): string {
   if (command.type === 'clipMesh') return '待确认切割';
   if (command.type === 'cloneMesh') return '待确认复制';
+  if (command.type === 'rotateMesh') return '待确认旋转';
+  if (command.type === 'setMeshScale') return '待确认缩放';
   return '待确认操作';
 }
 
 function pendingDescription(command: OperationCommand): string {
   if (command.type === 'clipMesh') return '预览已经显示在视窗中，确认后写入历史，取消会恢复当前场景。';
   if (command.type === 'cloneMesh') return `将复制 ${command.params.count} 个对象。`;
+  if (command.type === 'rotateMesh') return `旋转预览已经显示在视窗中，将应用 ${command.params.angleDeg} 度。`;
+  if (command.type === 'setMeshScale') return `缩放预览已经显示在视窗中，将应用 ${command.params.scale.join(', ')}。`;
   return command.type;
 }
 
 function pendingConfirmLabel(command: OperationCommand): string {
   if (command.type === 'clipMesh') return '确认应用';
   if (command.type === 'cloneMesh') return '确认复制';
+  if (command.type === 'rotateMesh' || command.type === 'setMeshScale') return '确认应用';
   return '确认';
 }

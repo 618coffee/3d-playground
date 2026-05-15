@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const appUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:4173/';
+const appUrl = process.env.SMOKE_URL ?? 'http://127.0.0.1:5173/';
 const chromePath = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const debugPort = Number(process.env.CHROME_DEBUG_PORT ?? 9223);
 
@@ -69,10 +69,13 @@ try {
     }
     textarea.value = '把当前对象绕 Z 轴旋转 30 度';
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    const parseButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('解析'));
-    parseButton?.click();
-    const executeButton = await waitForUi(() => [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('执行')), 20_000);
-    executeButton?.click();
+    const sendButton = document.querySelector('button[aria-label="发送指令"]');
+    if (!(sendButton instanceof HTMLButtonElement)) {
+      throw new Error('AI send button not found');
+    }
+    sendButton.click();
+    const confirmDraftButton = await waitForUi(() => [...document.querySelectorAll('button')].find((button) => /确认(执行|应用)/.test(button.textContent ?? '')), 20_000);
+    confirmDraftButton?.click();
     const hasStatus = Boolean(await waitForUi(() => byText('已旋转 30 度'), 1200));
     const statusTexts = [
       ...document.querySelectorAll('.history-header-actions span, .agent-message p, .agent-review-card strong, .agent-review-card p, button'),

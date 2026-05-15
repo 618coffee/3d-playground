@@ -288,6 +288,7 @@ function validateScene(input) {
 }
 
 function validateSceneMesh(mesh) {
+  const color = normalizeHexColor(mesh.color);
   return {
     id: requiredString(mesh.id, 'scene.mesh.id', 200),
     name: optionalString(mesh.name, 'scene.mesh.name', 200) ?? mesh.id,
@@ -295,6 +296,7 @@ function validateSceneMesh(mesh) {
     visible: typeof mesh.visible === 'boolean' ? mesh.visible : true,
     locked: typeof mesh.locked === 'boolean' ? mesh.locked : false,
     selected: typeof mesh.selected === 'boolean' ? mesh.selected : false,
+    ...(color ? { color, colorLabel: colorLabelForHex(color) } : {}),
     bounds: Array.isArray(mesh.bounds) && mesh.bounds.length === 6 ? mesh.bounds.filter(Number.isFinite).slice(0, 6) : undefined,
     stats: isRecord(mesh.stats) ? {
       points: finiteOrDefault(mesh.stats.points, 0),
@@ -338,7 +340,9 @@ function validateMeshTarget(target, request, path) {
   }
 
   if (target.source !== undefined) {
-    return { source: enumValue(target.source, ['selection', 'allVisible'], `${path}.source`) };
+    const source = enumValue(target.source, ['selection', 'allVisible'], `${path}.source`);
+    const colorTarget = inferColorTarget(request, source === 'selection');
+    return colorTarget ?? { source };
   }
 
   if (typeof target.name === 'string') {
@@ -349,6 +353,70 @@ function validateMeshTarget(target, request, path) {
   }
 
   throw new HttpError(502, 'invalid_operation_command', `${path} must use meshId, meshIds, source, or name.`);
+}
+
+function normalizeHexColor(value) {
+  if (typeof value !== 'string') return undefined;
+  const match = value.trim().match(/^#?([0-9a-f]{6})$/i);
+  return match ? `#${match[1].toLowerCase()}` : undefined;
+}
+
+function colorLabelForHex(hex) {
+  const red = Number.parseInt(hex.slice(1, 3), 16) / 255;
+  const green = Number.parseInt(hex.slice(3, 5), 16) / 255;
+  const blue = Number.parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+  if (delta < 0.08) return lightness < 0.35 ? 'black' : lightness > 0.75 ? 'white' : 'gray';
+  let hue;
+  if (max === red) hue = ((green - blue) / delta) % 6;
+  else if (max === green) hue = (blue - red) / delta + 2;
+  else hue = (red - green) / delta + 4;
+  const degrees = (hue * 60 + 360) % 360;
+  if (degrees < 15 || degrees >= 345) return 'red';
+  if (degrees < 36) return 'orange';
+  if (degrees < 55) return 'gold';
+  if (degrees < 75) return 'yellow';
+  if (degrees < 165) return 'green';
+  if (degrees < 195) return 'cyan';
+  if (degrees < 255) return 'blue';
+  if (degrees < 285) return 'purple';
+  if (degrees < 345) return 'magenta';
+  return 'gray';
+}
+
+function inferColorTarget(request, preferSelection) {
+  const colorLabels = requestedColorLabels(request.text);
+  if (colorLabels.length === 0) return undefined;
+  const selectedIds = new Set(request.scene.selection ?? []);
+  const visibleMeshes = request.scene.meshes.filter((mesh) => mesh.visible !== false);
+  const selectedMeshes = visibleMeshes.filter((mesh) => selectedIds.has(mesh.id));
+  const searchMeshes = preferSelection && selectedMeshes.length > 0 ? selectedMeshes : visibleMeshes;
+  const matches = searchMeshes.filter((mesh) => colorLabels.includes(mesh.colorLabel));
+  if (matches.length === 1) return { meshId: matches[0].id };
+  return undefined;
+}
+
+function requestedColorLabels(text) {
+  const labels = [];
+  const add = (label) => {
+    if (!labels.includes(label)) labels.push(label);
+  };
+  if (/(橙色|橘色|orange)/i.test(text)) add('orange');
+  if (/(金色|金黄|gold|amber)/i.test(text)) add('gold');
+  if (/(黄色|yellow)/i.test(text)) add('yellow');
+  if (/(蓝色|blue)/i.test(text)) add('blue');
+  if (/(青色|cyan)/i.test(text)) add('cyan');
+  if (/(绿色|green)/i.test(text)) add('green');
+  if (/(红色|red)/i.test(text)) add('red');
+  if (/(紫色|purple)/i.test(text)) add('purple');
+  if (/(粉色|洋红|magenta|pink)/i.test(text)) add('magenta');
+  if (/(白色|white)/i.test(text)) add('white');
+  if (/(黑色|black)/i.test(text)) add('black');
+  if (/(灰色|gray|grey)/i.test(text)) add('gray');
+  return labels;
 }
 
 function validateScopeTarget(target, expectedScope, path) {

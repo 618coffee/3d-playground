@@ -118,13 +118,22 @@ export default function App() {
       execute(command);
       return;
     }
-    if (command.type !== 'cloneMesh') return;
     const sceneSnapshot = historyRef.current.current();
     const targetIds = pendingCommandTargetIds(command, sceneSnapshot);
     if (targetIds.length === 0) return;
-    previewCloneDraft(runtime, sceneSnapshot, targetIds, command);
+    if (command.type === 'cloneMesh') {
+      previewCloneDraft(runtime, sceneSnapshot, targetIds, command);
+      setPendingCommand(command);
+      setLastMessage('已生成复制预览，确认后写入历史。');
+      return;
+    }
+    if (command.type === 'rotateMesh' || command.type === 'setMeshScale') {
+      previewTransformDraft(runtime, targetIds, command);
+      setPendingCommand(command);
+      setLastMessage(command.type === 'rotateMesh' ? '已生成旋转预览，确认后应用。' : '已生成缩放预览，确认后应用。');
+      return;
+    }
     setPendingCommand(command);
-    setLastMessage('已生成复制预览，确认后写入历史。');
   }, [execute, pendingCommand, runtime]);
 
   const importFile = useCallback(async (file: File) => {
@@ -407,8 +416,15 @@ function previewCloneDraft(runtime: ReturnType<typeof createVtkRuntime>, scene: 
   });
 }
 
+function previewTransformDraft(runtime: ReturnType<typeof createVtkRuntime>, targetIds: string[], command: Extract<OperationCommand, { type: 'rotateMesh' | 'setMeshScale' }>): void {
+  targetIds.forEach((meshId) => {
+    if (command.type === 'rotateMesh') runtime.rotateMesh(meshId, command.params.axis, command.params.angleDeg);
+    else runtime.setMeshScale(meshId, command.params.scale);
+  });
+}
+
 function isRuntimePreviewCommand(command: OperationCommand): boolean {
-  return command.type === 'cloneMesh' || command.type === 'clipMesh';
+  return command.type === 'cloneMesh' || command.type === 'clipMesh' || command.type === 'rotateMesh' || command.type === 'setMeshScale';
 }
 
 function multiplyVec3(vector: [number, number, number], factor: number): [number, number, number] {

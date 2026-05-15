@@ -172,6 +172,8 @@ function inferTarget(request, options = {}) {
   if (/(整个|全部|所有|全体|全场景|全模型|全部可见|所有可见|entire|whole|all visible|all meshes|everything)/i.test(request.text)) {
     return { source: 'allVisible' };
   }
+  const colorTarget = inferColorTarget(request);
+  if (colorTarget) return colorTarget;
   if (/(当前|选中|selected|selection)/i.test(request.text) && request.scene.selection.length > 0) return { source: 'selection' };
 
   const exact = request.scene.meshes.find((mesh) => text.includes(mesh.id.toLowerCase()) || text.includes(mesh.name.toLowerCase()));
@@ -182,6 +184,39 @@ function inferTarget(request, options = {}) {
 
   if (options.allowSelection && request.scene.selection.length > 0) return { source: 'selection' };
   return undefined;
+}
+
+function inferColorTarget(request) {
+  const colorLabels = requestedColorLabels(request.text);
+  if (colorLabels.length === 0) return undefined;
+  const selectedIds = new Set(request.scene.selection ?? []);
+  const visibleMeshes = request.scene.meshes.filter((mesh) => mesh.visible !== false);
+  const selectedMeshes = visibleMeshes.filter((mesh) => selectedIds.has(mesh.id));
+  const referencesSelection = /(当前|选中|已选|所选|选择的|current|selected|selection)/i.test(request.text);
+  const searchMeshes = referencesSelection && selectedMeshes.length > 0 ? selectedMeshes : visibleMeshes;
+  const matches = searchMeshes.filter((mesh) => colorLabels.includes(mesh.colorLabel));
+  if (matches.length === 1) return { meshId: matches[0].id };
+  return undefined;
+}
+
+function requestedColorLabels(text) {
+  const labels = [];
+  const add = (label) => {
+    if (!labels.includes(label)) labels.push(label);
+  };
+  if (/(橙色|橘色|orange)/i.test(text)) add('orange');
+  if (/(金色|金黄|gold|amber)/i.test(text)) add('gold');
+  if (/(黄色|yellow)/i.test(text)) add('yellow');
+  if (/(蓝色|blue)/i.test(text)) add('blue');
+  if (/(青色|cyan)/i.test(text)) add('cyan');
+  if (/(绿色|green)/i.test(text)) add('green');
+  if (/(红色|red)/i.test(text)) add('red');
+  if (/(紫色|purple)/i.test(text)) add('purple');
+  if (/(粉色|洋红|magenta|pink)/i.test(text)) add('magenta');
+  if (/(白色|white)/i.test(text)) add('white');
+  if (/(黑色|black)/i.test(text)) add('black');
+  if (/(灰色|gray|grey)/i.test(text)) add('gray');
+  return labels;
 }
 
 function baseCommand(request, type, target, params) {

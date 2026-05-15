@@ -71,6 +71,107 @@ test('normalizes schema-wrapper actions returned by an LLM', () => {
   assert.equal(response.action.rawText, '把当前对象绕 Z 轴旋转 30 度');
 });
 
+test('preserves mesh colors and derives color labels for provider targeting', () => {
+  const colorRequest = validateAgentRequest({
+    id: 'color-request',
+    text: '把橙色对象绕着 y 轴旋转 30 度',
+    scene: {
+      unit: 'mm',
+      displayMode: 'surface',
+      selection: [],
+      meshes: [
+        {
+          id: 'stator-vanes',
+          name: 'Warm stator vane stage',
+          sourceFormat: 'procedural',
+          visible: true,
+          locked: false,
+          selected: false,
+          color: '#f08a4b',
+          bounds: [-16, -4, -28, 28, -28, 28],
+          stats: { points: 252, cells: 144, triangles: 144 },
+          transform: { position: [0, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+        },
+        {
+          id: 'compressor-core',
+          name: 'Compressor core shaft',
+          sourceFormat: 'procedural',
+          visible: true,
+          locked: false,
+          selected: false,
+          color: '#d5a553',
+          bounds: [-45, 45, -11, 11, -11, 11],
+          stats: { points: 128, cells: 64, triangles: 64 },
+          transform: { position: [0, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+        },
+      ],
+    },
+    conversation: [],
+  });
+
+  assert.equal(colorRequest.scene.meshes[0].color, '#f08a4b');
+  assert.equal(colorRequest.scene.meshes[0].colorLabel, 'orange');
+  assert.equal(colorRequest.scene.meshes[1].color, '#d5a553');
+  assert.equal(colorRequest.scene.meshes[1].colorLabel, 'gold');
+});
+
+test('narrows color-targeted selection commands to the uniquely matching mesh', () => {
+  const colorRequest = validateAgentRequest({
+    id: 'color-selection-request',
+    text: '把选中的橙色对象绕着 y 轴旋转 30 度',
+    scene: {
+      unit: 'mm',
+      displayMode: 'surface',
+      selection: ['compressor-core', 'stator-vanes'],
+      meshes: [
+        {
+          id: 'compressor-core',
+          name: 'Compressor core shaft',
+          sourceFormat: 'procedural',
+          visible: true,
+          locked: false,
+          selected: true,
+          color: '#d5a553',
+          bounds: [-45, 45, -11, 11, -11, 11],
+          stats: { points: 128, cells: 64, triangles: 64 },
+          transform: { position: [0, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+        },
+        {
+          id: 'stator-vanes',
+          name: 'Warm stator vane stage',
+          sourceFormat: 'procedural',
+          visible: true,
+          locked: false,
+          selected: true,
+          color: '#f08a4b',
+          bounds: [-16, -4, -28, 28, -28, 28],
+          stats: { points: 252, cells: 144, triangles: 144 },
+          transform: { position: [0, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+        },
+      ],
+    },
+    conversation: [],
+  });
+
+  const response = validateAgentResponse({
+    kind: 'actionDraft',
+    action: {
+      id: 'rotate-color-selection',
+      type: 'rotateMesh',
+      target: { source: 'selection' },
+      params: { axis: 'y', angleDeg: 30, pivot: 'boundsCenter', space: 'world' },
+      source: 'agent',
+      rawText: '把选中的橙色对象绕着 y 轴旋转 30 度',
+      confirmed: false,
+    },
+    explanation: 'Rotate the selected orange object.',
+    confidence: 0.9,
+  }, colorRequest);
+
+  assert.equal(response.kind, 'actionDraft');
+  assert.deepEqual(response.action.target, { meshId: 'stator-vanes' });
+});
+
 test('normalizes boolean-like strings in LLM clone payloads', () => {
   const response = validateAgentResponse({
     kind: 'actionDraft',

@@ -1094,25 +1094,21 @@ label input[type='file'] {
 }
 
 .agent-prompt-card {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  padding: 10px;
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  gap: 8px;
+  border-color: #2d4052;
+  background: #0f151d;
 }
 
-.agent-prompt-label,
+.agent-prompt-footer,
 .agent-review-head,
 .agent-review-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-}
-
-.agent-prompt-label {
-  color: #dfe8f1;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .agent-mode-chip,
@@ -1134,23 +1130,96 @@ label input[type='file'] {
   background: #10211d;
 }
 
-.agent-prompt-card textarea {
-  min-height: 92px;
+.agent-selection-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+  align-items: center;
+}
+
+.agent-selection-pill {
+  max-width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #35546a;
+  border-radius: 999px;
+  background: #14202a;
+  color: #d6e4f1;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-selection-pill.summary {
+  color: #aee6ff;
+  border-color: #24637f;
+  background: #0f2835;
+}
+
+.agent-selection-pill.muted {
+  color: #8fa3b8;
+  border-color: #2b3a49;
+  background: #111922;
+}
+
+.agent-chat-input-row {
+  min-width: 0;
+}
+
+.agent-chat-input-row textarea {
+  display: block;
+  width: 100%;
+  min-height: 68px;
+  max-height: 180px;
   resize: vertical;
   line-height: 1.45;
+  border-color: #2b6f90;
+  background: #0b1118;
+  padding: 9px 10px;
+  box-shadow: 0 0 0 2px rgba(73, 166, 216, 0.12);
 }
 
-.agent-prompt-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
+.agent-chat-input-row textarea:focus {
+  border-color: #39a2ce;
+  box-shadow: 0 0 0 2px rgba(73, 166, 216, 0.2);
 }
 
-.agent-secondary-action {
-  color: #b8c7d8;
-  background: #121a23;
+.agent-prompt-footer {
+  min-height: 42px;
+  padding-top: 2px;
+}
+
+.agent-send-button {
+  width: 28px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 9px;
+  color: #f2fbff;
+  background: #13739d;
+  border-color: #2389b6;
+}
+
+.agent-send-button:hover:not(:disabled) {
+  background: #1c86b4;
+  border-color: #35a1cf;
+}
+
+.agent-send-button.is-stopping {
+  color: #ffd5d5;
+  background: #3a1f25;
+  border-color: #7c3b45;
+}
+
+.agent-send-button.is-stopping:hover:not(:disabled) {
+  background: #512832;
+  border-color: #9f4c58;
 }
 
 .agent-chip-row {

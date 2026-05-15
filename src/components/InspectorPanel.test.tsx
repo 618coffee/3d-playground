@@ -26,6 +26,23 @@ const cloneCommand: OperationCommand = {
 };
 
 describe('InspectorPanel', () => {
+  it('keeps the AI chat composer visible when no object is selected', () => {
+    render(
+      <InspectorPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onConfirmPending={vi.fn()}
+        onCancelPending={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('AI 指令输入')).toBeInTheDocument();
+    expect(screen.getByText('未选择对象')).toBeInTheDocument();
+  });
+
   it('uses contextual confirmation labels for pending operations', () => {
     const props = {
       scene: createInitialScene(),

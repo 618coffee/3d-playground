@@ -1,8 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentPanel } from './AgentPanel';
 import { createInitialScene } from '../domain/scene';
-import type { ActionResult } from '../domain/actions';
+import type { ActionResult, MeshEntity } from '../domain/actions';
 import type { AgentResponse } from '../domain/protocol';
 
 const actionDraft: AgentResponse = {
@@ -54,10 +54,11 @@ describe('AgentPanel', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the LLM API label only in the prompt header without a footer frame', () => {
+  it('uses a compact send control and removes retry, stop, and parse-review actions', () => {
     render(
       <AgentPanel
         scene={createInitialScene()}
+        selectedMeshes={[]}
         historyEntries={[]}
         pendingCommand={null}
         onExecute={vi.fn()}
@@ -65,8 +66,59 @@ describe('AgentPanel', () => {
     );
 
     expect(screen.getByText('LLM API')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '发送指令' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /重试/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /停止/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /解析审阅/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/LLM API 已就绪/)).not.toBeInTheDocument();
     expect(document.querySelector('.agent-status-footer')).not.toBeInTheDocument();
+  });
+
+  it('places the model chip and send button in a footer below the full-width prompt input', () => {
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByLabelText('AI 指令输入');
+    const footer = document.querySelector('.agent-prompt-footer');
+    const sendButton = screen.getByRole('button', { name: '发送指令' });
+
+    expect(footer).toContainElement(screen.getByText('LLM API'));
+    expect(footer).toContainElement(sendButton);
+    expect(input.compareDocumentPosition(footer as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(input.parentElement).not.toBe(sendButton.parentElement);
+  });
+
+  it('renders selection context pills for empty, single, and multiple selections', () => {
+    const meshA = createMesh('fan-stage', 'Blue titanium fan stage', true);
+    const meshB = createMesh('compressor-core', 'Compressor core shaft', true);
+    const scene = createInitialScene([meshA, meshB]);
+    const props = {
+      scene,
+      historyEntries: [],
+      pendingCommand: null,
+      onExecute: vi.fn(),
+    };
+
+    const { rerender } = render(<AgentPanel {...props} selectedMeshes={[]} />);
+
+    expect(screen.getByText('未选择对象')).toBeInTheDocument();
+
+    rerender(<AgentPanel {...props} selectedMeshes={[meshA]} />);
+
+    expect(screen.getByText('Blue titanium fan stage')).toBeInTheDocument();
+
+    rerender(<AgentPanel {...props} selectedMeshes={[meshA, meshB]} />);
+
+    expect(screen.getByText('2 个对象')).toBeInTheDocument();
+    expect(screen.getByText('Blue titanium fan stage')).toBeInTheDocument();
+    expect(screen.getByText('Compressor core shaft')).toBeInTheDocument();
   });
 
   it('lets users discard an action draft without executing it', async () => {
@@ -76,13 +128,14 @@ describe('AgentPanel', () => {
     render(
       <AgentPanel
         scene={createInitialScene()}
+        selectedMeshes={[]}
         historyEntries={[]}
         pendingCommand={null}
         onExecute={execute}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
 
     expect(await screen.findByRole('button', { name: /丢弃草稿/ })).toBeInTheDocument();
 
@@ -99,6 +152,7 @@ describe('AgentPanel', () => {
 
     const props = {
       scene: createInitialScene(),
+      selectedMeshes: [],
       historyEntries: [],
       pendingCommand: actionDraft.action,
       onExecute: execute,
@@ -107,7 +161,7 @@ describe('AgentPanel', () => {
 
     render(<AgentPanel {...props} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(await screen.findByRole('button', { name: /丢弃草稿/ }));
 
     expect(cancelPending).toHaveBeenCalledTimes(1);
@@ -122,6 +176,7 @@ describe('AgentPanel', () => {
     render(
       <AgentPanel
         scene={createInitialScene()}
+        selectedMeshes={[]}
         historyEntries={[]}
         pendingCommand={null}
         onExecute={execute}
@@ -129,7 +184,7 @@ describe('AgentPanel', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
 
     await screen.findByRole('button', { name: /确认执行/ });
 
@@ -145,6 +200,7 @@ describe('AgentPanel', () => {
     render(
       <AgentPanel
         scene={createInitialScene()}
+        selectedMeshes={[]}
         historyEntries={[]}
         pendingCommand={cloneDraft.action}
         onExecute={execute}
@@ -152,7 +208,7 @@ describe('AgentPanel', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(await screen.findByRole('button', { name: /确认应用/ }));
 
     expect(confirmPending).toHaveBeenCalledTimes(1);
@@ -166,18 +222,20 @@ describe('AgentPanel', () => {
     const { rerender } = render(
       <AgentPanel
         scene={createInitialScene()}
+        selectedMeshes={[]}
         historyEntries={[]}
         pendingCommand={cloneDraft.action}
         onExecute={execute}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     expect(await screen.findByRole('button', { name: /确认应用/ })).toBeInTheDocument();
 
     rerender(
       <AgentPanel
         scene={createInitialScene()}
+        selectedMeshes={[]}
         historyEntries={[]}
         pendingCommand={null}
         onExecute={execute}
@@ -201,15 +259,131 @@ describe('AgentPanel', () => {
     render(
       <AgentPanel
         scene={createInitialScene()}
+        selectedMeshes={[]}
         historyEntries={[]}
         pendingCommand={null}
         onExecute={execute}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /解析审阅/ }));
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(await screen.findByRole('button', { name: /确认执行/ }));
 
     expect(await screen.findByText('暂无操作草稿。')).toBeInTheDocument();
   });
+
+  it('keeps the prompt editable while loading and aborts stale requests before resending', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      if (fetchMock.mock.calls.length === 1) {
+        return new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+          void resolve;
+        });
+      }
+      return Promise.resolve(new Response(JSON.stringify(actionDraft), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+
+    expect(input).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: '停止生成' })).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: '重置视角' } });
+    fireEvent.click(screen.getByRole('button', { name: '停止生成' }));
+
+    expect((fetchMock.mock.calls[0][1]?.signal as AbortSignal).aborted).toBe(true);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).text).toBe('重置视角');
+    expect(await screen.findByRole('button', { name: /确认执行/ })).toBeInTheDocument();
+  });
+
+  it('keeps the stop control enabled while loading even when the prompt is cleared', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void input;
+      return new Promise<Response>((resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        void resolve;
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+    fireEvent.change(input, { target: { value: '' } });
+
+    const stopButton = screen.getByRole('button', { name: '停止生成' });
+    expect(stopButton).not.toBeDisabled();
+
+    fireEvent.click(stopButton);
+
+    expect((fetchMock.mock.calls[0][1]?.signal as AbortSignal).aborted).toBe(true);
+    expect(await screen.findByText('请求已取消。')).toBeInTheDocument();
+  });
+
+  it('ignores a cancelled response if an adapter resolves after abort', async () => {
+    let resolveResponse: (value: Response) => void = () => undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      void input;
+      return new Promise<Response>((resolve) => {
+        resolveResponse = resolve;
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+    fireEvent.click(screen.getByRole('button', { name: '停止生成' }));
+    resolveResponse(new Response(JSON.stringify(actionDraft), { status: 200 }));
+
+    expect(await screen.findByText('请求已取消。')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: /确认执行/ })).not.toBeInTheDocument());
+  });
 });
+
+function createMesh(id: string, name: string, selected: boolean): MeshEntity {
+  return {
+    id,
+    name,
+    sourceFormat: 'procedural',
+    visible: true,
+    locked: false,
+    selected,
+    color: '#43b7ff',
+    opacity: 1,
+    bounds: [-1, 1, -1, 1, -1, 1],
+    stats: { points: 8, cells: 6 },
+    transform: { position: [0, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+  };
+}

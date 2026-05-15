@@ -63,6 +63,8 @@ describe('buildAgentContext', () => {
     expect(meshContext).toEqual({
       id: 'fan-1',
       name: 'Turbofan stage',
+      color: '#4fb3ff',
+      colorLabel: 'blue',
       visible: true,
       locked: false,
       source: 'procedural',

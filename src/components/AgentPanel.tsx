@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Play, RotateCcw, Send, Sparkles, Square, X } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, ChevronRight, Play, Sparkles, Square, X } from 'lucide-react';
 import { buildAgentContext } from '../agent/context';
 import { createLlmAgentClient, createRuleParserAdapter } from '../agent/adapters';
-import type { ActionResult, OperationCommand } from '../domain/actions';
+import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import type { HistoryEntry } from '../domain/history';
 import type { ActionRisk, AgentAdapter, AgentConversationTurn, AgentPlanStep, AgentResponse } from '../domain/protocol';
 import type { SceneState } from '../domain/scene';
@@ -10,6 +10,7 @@ import { validateAgentResponse } from '../domain/validators';
 
 type AgentPanelProps = {
   scene: SceneState;
+  selectedMeshes?: MeshEntity[];
   historyEntries: HistoryEntry[];
   pendingCommand: OperationCommand | null;
   onExecute: (command: OperationCommand) => ActionResult;
@@ -28,7 +29,7 @@ const examples = [
   '重置视角',
 ];
 
-export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, onConfirmPending, onCancelPending, onPreviewDraft }: AgentPanelProps) {
+export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pendingCommand, onExecute, onConfirmPending, onCancelPending, onPreviewDraft }: AgentPanelProps) {
   const fallbackAdapter = useMemo(() => createRuleParserAdapter(), []);
   const adapter = useMemo(() => createAgentAdapter(fallbackAdapter), [fallbackAdapter]);
   const [text, setText] = useState(examples[0]);
@@ -36,10 +37,11 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
   const [conversation, setConversation] = useState<AgentConversationTurn[]>([]);
   const [status, setStatus] = useState<AgentStatus>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [lastRequest, setLastRequest] = useState('');
   const [debugOpen, setDebugOpen] = useState(false);
   const [planStatuses, setPlanStatuses] = useState<Record<string, PlanStepStatus>>({});
   const abortRef = useRef<AbortController | null>(null);
+  const requestSerialRef = useRef(0);
+  const inFlightPromptRef = useRef('');
   const lastPendingActionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -58,16 +60,32 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
 
   const sendRequest = async (input = text) => {
     const prompt = input.trim();
-    if (!prompt || status === 'loading') return;
 
-    abortRef.current?.abort();
+    if (status === 'loading') {
+      const shouldResend = Boolean(prompt) && prompt !== inFlightPromptRef.current;
+      abortRef.current?.abort();
+      if (!shouldResend) {
+        requestSerialRef.current += 1;
+        abortRef.current = null;
+        inFlightPromptRef.current = '';
+        setStatus('cancelled');
+        setError(null);
+        setConversation((current) => [...current, createTurn('tool', '请求已取消。')]);
+        return;
+      }
+    }
+
+    if (!prompt) return;
+
+    const requestSerial = requestSerialRef.current + 1;
+    requestSerialRef.current = requestSerial;
     const controller = new AbortController();
     abortRef.current = controller;
+    inFlightPromptRef.current = prompt;
     const userTurn = createTurn('user', prompt);
     const nextConversation = [...conversation, userTurn];
 
     setText(input);
-    setLastRequest(prompt);
     setConversation(nextConversation);
     setStatus('loading');
     setError(null);
@@ -85,12 +103,14 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
       }, { signal: controller.signal });
       const validated = validateAgentResponse(next);
       if (!validated.ok) throw new Error(validated.error);
+      if (requestSerialRef.current !== requestSerial || controller.signal.aborted) return;
 
       setResponse(validated.value);
       if (validated.value.kind === 'actionDraft') onPreviewDraft?.(validated.value.action);
       setConversation((current) => [...current, createTurn('assistant', conversationSummary(validated.value))]);
       setStatus('ready');
     } catch (nextError) {
+      if (requestSerialRef.current !== requestSerial) return;
       if (controller.signal.aborted) {
         setStatus('cancelled');
         setConversation((current) => [...current, createTurn('tool', '请求已取消。')]);
@@ -101,15 +121,6 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
-  };
-
-  const retryLastRequest = () => {
-    if (!lastRequest) return;
-    void sendRequest(lastRequest);
-  };
-
-  const stopRequest = () => {
-    abortRef.current?.abort();
   };
 
   const discardDraft = () => {
@@ -152,27 +163,28 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
   return (
     <div className="panel-body stacked agent-review-surface">
       <section className="agent-prompt-card" aria-label="AI command prompt">
-        <label className="agent-prompt-label" htmlFor="agent-command-input">
-          <span>AI 指令</span>
+        <SelectionPills selectedMeshes={selectedMeshes} />
+        <div className="agent-chat-input-row">
+          <textarea
+            id="agent-command-input"
+            aria-label="AI 指令输入"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            rows={3}
+            placeholder="描述要审阅的 3D 操作"
+          />
+        </div>
+        <div className="agent-prompt-footer">
           <span className="agent-mode-chip">{adapter.label}</span>
-        </label>
-        <textarea
-          id="agent-command-input"
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          rows={4}
-          disabled={status === 'loading'}
-          placeholder="描述要审阅的 3D 操作"
-        />
-        <div className="agent-prompt-actions">
-          <button className="agent-secondary-action" disabled={!lastRequest || status === 'loading'} onClick={retryLastRequest}>
-            <RotateCcw size={15} /> 重试
-          </button>
-          <button className="agent-secondary-action" disabled={status !== 'loading'} onClick={stopRequest}>
-            <Square size={13} /> 停止
-          </button>
-          <button className="primary-button" disabled={status === 'loading'} onClick={() => void sendRequest()}>
-            <Send size={15} /> 解析审阅
+          <button
+            type="button"
+            className={`agent-send-button ${status === 'loading' ? 'is-stopping' : ''}`}
+            disabled={status !== 'loading' && !text.trim()}
+            aria-label={status === 'loading' ? '停止生成' : '发送指令'}
+            title={status === 'loading' ? '停止当前请求；如果已编辑提示词则重新发送' : '发送指令'}
+            onClick={() => void sendRequest()}
+          >
+            {status === 'loading' ? <Square size={15} aria-hidden="true" /> : <ArrowUp size={21} aria-hidden="true" strokeWidth={2.4} />}
           </button>
         </div>
       </section>
@@ -207,6 +219,25 @@ export function AgentPanel({ scene, historyEntries, pendingCommand, onExecute, o
         pendingCommand={pendingCommand}
       />
 
+    </div>
+  );
+}
+
+function SelectionPills({ selectedMeshes }: { selectedMeshes: MeshEntity[] }) {
+  if (selectedMeshes.length === 0) {
+    return (
+      <div className="agent-selection-pills" aria-label="Selected scene objects">
+        <span className="agent-selection-pill muted">未选择对象</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="agent-selection-pills" aria-label="Selected scene objects">
+      {selectedMeshes.length > 1 ? <span className="agent-selection-pill summary">{selectedMeshes.length} 个对象</span> : null}
+      {selectedMeshes.map((mesh) => (
+        <span className="agent-selection-pill" key={mesh.id} title={mesh.id}>{mesh.name}</span>
+      ))}
     </div>
   );
 }
