@@ -12,17 +12,12 @@ import {
   Save,
   Undo2,
 } from 'lucide-react';
-import type { DisplayMode } from '../domain/actions';
 import type { SampleWorkspaceId, SampleWorkspaceOption } from '../viewer/sampleEngine';
 
 type PanelKey = 'left' | 'right' | 'bottom';
 type PanelVisibility = Record<PanelKey, boolean>;
 
 type TopBarProps = {
-  meshCount: number;
-  selectedCount: number;
-  visibleCount: number;
-  displayMode: DisplayMode;
   canUndo: boolean;
   canRedo: boolean;
   workspaces: SampleWorkspaceOption[];
@@ -38,10 +33,6 @@ type TopBarProps = {
 };
 
 export function TopBar({
-  meshCount,
-  selectedCount,
-  visibleCount,
-  displayMode,
   canUndo,
   canRedo,
   workspaces,
@@ -109,13 +100,6 @@ export function TopBar({
         <button className="icon-button" title="导出网格将在增强版开放" disabled>
           <Download size={16} />
         </button>
-      </div>
-      <div className="status-strip">
-        <span>{meshCount} 对象</span>
-        <span>{visibleCount} 可见</span>
-        <span>{selectedCount} 选中</span>
-        <span>{displayMode}</span>
-        <span>单位 mm</span>
       </div>
     </header>
   );

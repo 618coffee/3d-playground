@@ -15,6 +15,7 @@ const emptyScene = createInitialScene();
 type PanelKey = 'left' | 'right' | 'bottom';
 type PanelVisibility = Record<PanelKey, boolean>;
 type PanelSizes = { left: number; right: number; bottom: number };
+type ViewOrientation = 'isometric' | 'front' | 'top' | 'right';
 
 const PANEL_LIMITS = {
   left: { min: 220, max: 420 },
@@ -32,6 +33,7 @@ export default function App() {
   const [workspaceId, setWorkspaceId] = useState<SampleWorkspaceId>('turbofan');
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>({ left: true, right: true, bottom: true });
   const [panelSizes, setPanelSizes] = useState<PanelSizes>({ left: 260, right: 330, bottom: 156 });
+  const [viewOrientation, setViewOrientation] = useState<ViewOrientation>('isometric');
   const [viewScale, setViewScaleState] = useState(1);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef<HistoryStore>(createHistoryStore(emptyScene));
@@ -40,6 +42,7 @@ export default function App() {
   const selectedMeshes = scene.meshes.filter((mesh) => scene.selection.includes(mesh.id));
   const selectedMesh = selectedMeshes[0];
   const selectedLabel = scene.selection.length > 1 ? `${scene.selection.length} selected` : selectedMesh?.name;
+  const visibleMeshCount = scene.meshes.filter((mesh) => mesh.visible).length;
   const historyEntries = historyRef.current.entries();
 
   const refreshFromHistory = useCallback((message?: string) => {
@@ -59,6 +62,7 @@ export default function App() {
     historyRef.current = createHistoryStore(nextScene);
     setPendingCommand(null);
     setWorkspaceId(workspace.id);
+    setViewOrientation('isometric');
     setViewScaleState(1);
     runtime.setViewScale(1);
     setScene(nextScene);
@@ -77,6 +81,9 @@ export default function App() {
     const executor = createOperationExecutor(historyRef.current, runtime);
     const before = historyRef.current.current();
     const result = executor.execute(command);
+    if (command.type === 'resetView' && result.status !== 'failed') {
+      setViewOrientation(command.params.orientation);
+    }
     const after = historyRef.current.current();
     if (result.requiresConfirmation) {
       setPendingCommand(command);
@@ -249,10 +256,6 @@ export default function App() {
       style={layoutStyle(panelSizes, panelVisibility)}
     >
       <TopBar
-        meshCount={scene.meshes.length}
-        selectedCount={scene.selection.length}
-        visibleCount={scene.meshes.filter((mesh) => mesh.visible).length}
-        displayMode={scene.displayMode}
         canUndo={historyRef.current.canUndo()}
         canRedo={historyRef.current.canRedo()}
         workspaces={SAMPLE_WORKSPACES}
@@ -284,8 +287,11 @@ export default function App() {
           <div className="viewer-slot">
             <ViewerPanel
               runtime={runtime}
-              meshCount={scene.meshes.filter((mesh) => mesh.visible).length}
+              meshCount={scene.meshes.length}
+              visibleCount={visibleMeshCount}
+              selectedCount={scene.selection.length}
               selectedName={selectedLabel}
+              currentOrientation={viewOrientation}
               viewScale={viewScale}
               displayMode={scene.displayMode}
               pendingCommand={pendingCommand}

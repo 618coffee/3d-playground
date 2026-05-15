@@ -93,7 +93,10 @@ describe('ViewerPanel', () => {
       <ViewerPanel
         runtime={createRuntimeStub()}
         meshCount={1}
+        visibleCount={1}
+        selectedCount={1}
         selectedName="Fan"
+        currentOrientation="isometric"
         viewScale={1}
         displayMode="surface"
         onDisplayModeChange={vi.fn()}
@@ -123,7 +126,10 @@ describe('ViewerPanel', () => {
       <ViewerPanel
         runtime={runtime}
         meshCount={1}
+        visibleCount={1}
+        selectedCount={1}
         selectedName="Fan"
+        currentOrientation="isometric"
         viewScale={1}
         displayMode="surface"
         onDisplayModeChange={vi.fn()}
@@ -153,6 +159,111 @@ describe('ViewerPanel', () => {
     expect(screen.getByTestId('world-axis-y')).toHaveAttribute('y2', '196');
   });
 
+  it('lets users switch orientation from the viewport orientation control', () => {
+    globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+    const onResetView = vi.fn();
+
+    render(
+      <ViewerPanel
+        runtime={createRuntimeStub()}
+        meshCount={1}
+        visibleCount={1}
+        selectedCount={1}
+        selectedName="Fan"
+        currentOrientation="right"
+        viewScale={1}
+        displayMode="surface"
+        onDisplayModeChange={vi.fn()}
+        onResetView={onResetView}
+        onRotateSelection={vi.fn()}
+        onViewScaleChange={vi.fn()}
+        onDropFile={vi.fn()}
+      />,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole('group', { name: '视角导航' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '当前视角：侧视图' }));
+    fireEvent.click(screen.getByRole('button', { name: '切换到等轴测' }));
+    fireEvent.click(screen.getByRole('button', { name: '切换到正视图' }));
+    fireEvent.click(screen.getByRole('button', { name: '切换到俯视图' }));
+
+    expect(onResetView).toHaveBeenNthCalledWith(1, 'right');
+    expect(onResetView).toHaveBeenNthCalledWith(2, 'isometric');
+    expect(onResetView).toHaveBeenNthCalledWith(3, 'front');
+    expect(onResetView).toHaveBeenNthCalledWith(4, 'top');
+  });
+
+  it('keeps orientation switching only in the collapsible viewport control', () => {
+    globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+
+    render(
+      <ViewerPanel
+        runtime={createRuntimeStub()}
+        meshCount={1}
+        visibleCount={1}
+        selectedCount={1}
+        selectedName="Fan"
+        currentOrientation="right"
+        viewScale={1}
+        displayMode="surface"
+        onDisplayModeChange={vi.fn()}
+        onResetView={vi.fn()}
+        onRotateSelection={vi.fn()}
+        onViewScaleChange={vi.fn()}
+        onDropFile={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: '等轴测视图' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '正视图' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '当前视角：侧视图' })).toHaveTextContent('侧视图');
+
+    const control = screen.getByRole('group', { name: '视角导航' });
+    expect(control).toHaveAttribute('data-expanded', 'false');
+
+    fireEvent.mouseEnter(control);
+
+    expect(control).toHaveAttribute('data-expanded', 'true');
+    expect(screen.getByRole('button', { name: '切换到等轴测' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '切换到正视图' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '切换到俯视图' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '切换到侧视图' })).not.toBeInTheDocument();
+
+    fireEvent.mouseLeave(control);
+
+    expect(control).toHaveAttribute('data-expanded', 'false');
+  });
+
+  it('shows scene status chips in the viewport instead of relying on the top bar', () => {
+    globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+
+    render(
+      <ViewerPanel
+        runtime={createRuntimeStub()}
+        meshCount={6}
+        visibleCount={5}
+        selectedCount={2}
+        selectedName="Fan"
+        currentOrientation="isometric"
+        viewScale={1}
+        displayMode="surface"
+        onDisplayModeChange={vi.fn()}
+        onResetView={vi.fn()}
+        onRotateSelection={vi.fn()}
+        onViewScaleChange={vi.fn()}
+        onDropFile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('6 对象')).toBeInTheDocument();
+    expect(screen.getByText('5 可见')).toBeInTheDocument();
+    expect(screen.getByText('2 选中')).toBeInTheDocument();
+    expect(screen.getByText('surface')).toBeInTheDocument();
+    expect(screen.getByText('单位 mm')).toBeInTheDocument();
+    expect(screen.queryByText('Fan')).not.toBeInTheDocument();
+  });
+
   it('annotates clone draft spacing in the viewport', () => {
     globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
     const pendingCommand: OperationCommand = {
@@ -168,7 +279,10 @@ describe('ViewerPanel', () => {
       <ViewerPanel
         runtime={createRuntimeStub()}
         meshCount={1}
+        visibleCount={1}
+        selectedCount={1}
         selectedName="Fan"
+        currentOrientation="isometric"
         viewScale={1}
         displayMode="surface"
         pendingCommand={pendingCommand}
@@ -192,7 +306,10 @@ describe('ViewerPanel', () => {
       <ViewerPanel
         runtime={createRuntimeStub()}
         meshCount={1}
+        visibleCount={1}
+        selectedCount={1}
         selectedName="Fan"
+        currentOrientation="isometric"
         viewScale={1}
         displayMode="surface"
         onDisplayModeChange={vi.fn()}

@@ -1,4 +1,4 @@
-import { BoxSelect, Camera, Grid3X3, Layers, Move3D, Orbit, RotateCcw, ZoomIn } from 'lucide-react';
+import { BoxSelect, Grid3X3, Layers, Orbit, RotateCcw, ZoomIn } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DisplayMode, OperationCommand, Vec3 } from '../domain/actions';
 import type { ViewportGuidePoint, ViewportGuideSnapshot, VtkRuntime } from '../viewer/vtkRuntime';
@@ -6,23 +6,36 @@ import type { ViewportGuidePoint, ViewportGuideSnapshot, VtkRuntime } from '../v
 type ViewerPanelProps = {
   runtime: VtkRuntime;
   meshCount: number;
+  visibleCount: number;
+  selectedCount: number;
   selectedName?: string;
+  currentOrientation: ViewOrientation;
   viewScale: number;
   displayMode: DisplayMode;
   pendingCommand?: OperationCommand | null;
   onDisplayModeChange: (mode: DisplayMode) => void;
-  onResetView: (orientation: 'isometric' | 'front' | 'top' | 'right') => void;
+  onResetView: (orientation: ViewOrientation) => void;
   onRotateSelection: (deltaX: number, deltaY: number) => void;
   onViewScaleChange: (scale: number) => void;
   onDropFile: (file: File) => void;
 };
 
+type ViewOrientation = 'isometric' | 'front' | 'top' | 'right';
+
+const ORIENTATION_OPTIONS: Array<{ id: ViewOrientation; label: string; shortLabel: string }> = [
+  { id: 'isometric', label: '等轴测', shortLabel: '等轴测' },
+  { id: 'front', label: '正视图', shortLabel: '正视图' },
+  { id: 'top', label: '俯视图', shortLabel: '俯视图' },
+  { id: 'right', label: '侧视图', shortLabel: '侧视图' },
+];
+
 const VIEW_SCALE_PRESETS = [0.2, 0.5, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4];
 
-export function ViewerPanel({ runtime, meshCount, selectedName, viewScale, displayMode, pendingCommand, onDisplayModeChange, onResetView, onRotateSelection, onViewScaleChange, onDropFile }: ViewerPanelProps) {
+export function ViewerPanel({ runtime, meshCount, visibleCount, selectedCount, selectedName, currentOrientation, viewScale, displayMode, pendingCommand, onDisplayModeChange, onResetView, onRotateSelection, onViewScaleChange, onDropFile }: ViewerPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rotatePointerRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const [objectRotateEnabled, setObjectRotateEnabled] = useState(false);
+  const [orientationExpanded, setOrientationExpanded] = useState(false);
   const [worldGridVisible, setWorldGridVisible] = useState(true);
   const [guideSnapshot, setGuideSnapshot] = useState<ViewportGuideSnapshot | null>(() => runtime.getViewportGuides());
   const hasSelection = Boolean(selectedName);
@@ -31,6 +44,8 @@ export function ViewerPanel({ runtime, meshCount, selectedName, viewScale, displ
   const preset = presetValue(clampedViewScale);
   const isPreset = preset !== undefined;
   const selectValue = isPreset ? String(preset) : String(clampedViewScale);
+  const currentOrientationOption = orientationOption(currentOrientation);
+  const expandedOrientationOptions = ORIENTATION_OPTIONS.filter((option) => option.id !== currentOrientation);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -96,8 +111,6 @@ export function ViewerPanel({ runtime, meshCount, selectedName, viewScale, displ
         >
           <Grid3X3 size={16} />
         </button>
-        <button title="等轴测视图" onClick={() => onResetView('isometric')}><Move3D size={16} /></button>
-        <button title="正视图" onClick={() => onResetView('front')}><Camera size={16} /></button>
       </div>
       <div ref={containerRef} className="vtk-container" />
       {worldGridVisible ? <WorldGridOverlay guide={guideSnapshot} /> : null}
@@ -163,14 +176,56 @@ export function ViewerPanel({ runtime, meshCount, selectedName, viewScale, displ
           <RotateCcw size={14} aria-hidden="true" />
         </button>
       </div>
-      <div className="orientation-cube" title="当前视图可通过工具栏重置">ISO</div>
+      <div
+        className="orientation-control"
+        role="group"
+        aria-label="视角导航"
+        data-expanded={orientationExpanded}
+        onMouseEnter={() => setOrientationExpanded(true)}
+        onMouseLeave={() => setOrientationExpanded(false)}
+        onFocus={() => setOrientationExpanded(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setOrientationExpanded(false);
+        }}
+      >
+        <button
+          type="button"
+          className="orientation-current"
+          title={currentOrientationOption.label}
+          aria-label={`当前视角：${currentOrientationOption.label}`}
+          onClick={() => onResetView(currentOrientation)}
+        >
+          {currentOrientationOption.shortLabel}
+        </button>
+        <div className="orientation-options" aria-hidden={!orientationExpanded}>
+          {expandedOrientationOptions.map((option, optionIndex) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`orientation-face orientation-face-${option.id} orientation-option-${optionIndex}`}
+              title={option.label}
+              aria-label={`切换到${option.label}`}
+              tabIndex={orientationExpanded ? 0 : -1}
+              onClick={() => onResetView(option.id)}
+            >
+              {option.shortLabel}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="viewport-status">
-        <span>{meshCount} visible</span>
+        <span>{meshCount} 对象</span>
+        <span>{visibleCount} 可见</span>
+        <span>{selectedCount} 选中</span>
         <span>{displayMode}</span>
-        <span>{selectedName ?? '未选择'}</span>
+        <span>单位 mm</span>
       </div>
     </main>
   );
+}
+
+function orientationOption(orientation: ViewOrientation): { id: ViewOrientation; label: string; shortLabel: string } {
+  return ORIENTATION_OPTIONS.find((option) => option.id === orientation) ?? ORIENTATION_OPTIONS[0];
 }
 
 function WorldGridOverlay({ guide }: { guide: ViewportGuideSnapshot | null }) {

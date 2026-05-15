@@ -91,7 +91,7 @@ label input[type='file'] {
 
 .top-bar {
   display: grid;
-  grid-template-columns: 270px 1fr auto;
+  grid-template-columns: 270px 1fr;
   align-items: center;
   gap: 16px;
   padding: 0 14px;
@@ -165,21 +165,6 @@ label input[type='file'] {
 
 .text-button {
   width: auto;
-}
-
-.status-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #a9bacb;
-  font-size: 12px;
-}
-
-.status-strip span {
-  border: 1px solid #2c3a49;
-  border-radius: 999px;
-  padding: 4px 8px;
-  background: #101820;
 }
 
 .workbench-grid {
@@ -705,19 +690,133 @@ label input[type='file'] {
   color: #b9c8d8;
 }
 
-.orientation-cube {
+.orientation-control {
+  --orientation-button-width: 72px;
+  --orientation-button-height: 48px;
+  --orientation-gap: 6px;
   position: absolute;
   top: 14px;
   right: 14px;
-  width: 54px;
-  height: 54px;
-  border: 1px solid #3b4a5a;
+  width: var(--orientation-button-width);
+  height: var(--orientation-button-height);
+  border: 0;
   border-radius: 6px;
-  display: grid;
-  place-items: center;
-  background: rgba(17, 25, 34, 0.9);
+  background: transparent;
+  overflow: visible;
+  z-index: 4;
+  transition:
+    width 180ms ease,
+    height 180ms ease,
+    filter 180ms ease;
+}
+
+.orientation-control[data-expanded='true'] {
+  width: calc(var(--orientation-button-width) * 2 + var(--orientation-gap));
+  height: calc(var(--orientation-button-height) * 2 + var(--orientation-gap));
+  filter: drop-shadow(0 18px 38px rgba(0, 0, 0, 0.32));
+}
+
+.orientation-current {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--orientation-button-width);
+  height: var(--orientation-button-height);
+  min-height: 0;
+  padding: 0;
+  border: 1px solid #3b4a5a;
+  border-radius: 5px;
+  background: rgba(17, 25, 34, 0.92);
   color: #75cfff;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+  transition:
+    width 180ms ease,
+    height 180ms ease,
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.orientation-current:hover,
+.orientation-current:focus-visible {
+  border-color: #49a6d8;
+  color: #d7f2ff;
+  background: rgba(24, 49, 66, 0.96);
+}
+
+.orientation-control[data-expanded='true'] .orientation-current {
+  border-color: #1a89c1;
+  background: rgba(18, 49, 73, 0.92);
+}
+
+.orientation-options {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.orientation-control[data-expanded='true'] .orientation-options {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.orientation-face {
+  position: absolute;
+  width: 100%;
+  max-width: var(--orientation-button-width);
+  height: var(--orientation-button-height);
+  min-height: 0;
+  padding: 0;
+  border: 1px solid #314355;
+  border-radius: 5px;
+  background: rgba(15, 22, 31, 0.92);
+  color: #a9bacb;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+  transform: translate(var(--collapsed-x), var(--collapsed-y)) scale(0.92);
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease,
+    transform 180ms ease;
+}
+
+.orientation-face:hover,
+.orientation-face:focus-visible {
+  border-color: #49a6d8;
+  color: #d7f2ff;
+  background: rgba(24, 49, 66, 0.96);
+  transform: translate(var(--expanded-x), var(--expanded-y)) translateY(-1px);
+}
+
+.orientation-control[data-expanded='true'] .orientation-face {
+  transform: translate(var(--expanded-x), var(--expanded-y));
+}
+
+.orientation-option-0 {
+  --collapsed-x: calc(var(--orientation-button-width) + var(--orientation-gap));
+  --collapsed-y: 0px;
+  --expanded-x: 0px;
+  --expanded-y: 0px;
+}
+
+.orientation-option-1 {
+  --collapsed-x: calc(var(--orientation-button-width) + var(--orientation-gap));
+  --collapsed-y: 0px;
+  --expanded-x: calc(var(--orientation-button-width) + var(--orientation-gap));
+  --expanded-y: calc(var(--orientation-button-height) + var(--orientation-gap));
+}
+
+.orientation-option-2 {
+  --collapsed-x: calc(var(--orientation-button-width) + var(--orientation-gap));
+  --collapsed-y: 0px;
+  --expanded-x: 0px;
+  --expanded-y: calc(var(--orientation-button-height) + var(--orientation-gap));
 }
 
 .axis-triad {
@@ -842,8 +941,10 @@ label input[type='file'] {
 .viewport-status {
   position: absolute;
   right: 14px;
-  bottom: 12px;
+  bottom: 56px;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
   color: #a9bacb;
   font-size: 12px;
@@ -1474,7 +1575,4 @@ textarea {
     display: none;
   }
 
-  .status-strip {
-    display: none;
-  }
 }
