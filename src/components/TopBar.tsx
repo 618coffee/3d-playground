@@ -59,7 +59,6 @@ export function TopBar({
     <header className="top-bar">
       <div className="brand-block">
         <div className="brand-title">AI 工业三维网格工作台</div>
-        <div className="brand-subtitle">vtk.js / Browser MVP</div>
       </div>
       <div className="top-actions">
         <label className="workspace-select" title="切换内置工作区模型">

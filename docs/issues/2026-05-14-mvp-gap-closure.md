@@ -29,11 +29,11 @@ Closed the eight MVP follow-up gaps with a more complete command lifecycle, rich
 
 ---
 
-# MVP Gap Closure
+## MVP Gap Closure
 
 ## Status
 
-In progress.
+Resolved and verified. The original investigation below is retained for context.
 
 ## Context
 

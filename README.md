@@ -12,7 +12,7 @@ npm run dev
 
 打开：`http://127.0.0.1:5173/`
 
-`npm run dev` 默认通过 Vite proxy 把 `/api/agent/respond` 转发到本机 Docker 后端 `http://127.0.0.1:8787`。如果后端没有启动，AI 面板会回退到本地规则解析器。
+`npm run dev` 默认通过 Vite proxy 把 `/api/agent/respond` 转发到本机 Docker 后端 `http://127.0.0.1:8787`。当前默认前端会调用这个本地 agent API；如果后端没有启动，AI 面板会显示请求错误。规则解析器仍作为离线 adapter 保留在代码中，主要用于开发和测试路径。
 
 如需接入 Azure AI Foundry / AI Services，把 `.env.example` 复制为 `.env` 后设置：
 
@@ -48,11 +48,13 @@ npm run smoke:browser
 ## 当前 MVP 能力
 
 - 浏览器内 `vtk.js` 三维渲染工作台。
-- 自动加载程序生成的涡扇发动机风格剖视模型。
+- 自动加载程序生成的涡扇发动机风格剖视模型，并可切换到机器人检测产线示例工作区。
 - 支持导入本地 `.stl`、`.obj`、`.ply`、`.vtp` 文件。
 - 左侧对象树、中央 3D 视窗、右侧属性/操作/AI 面板、底部操作时间线。
 - 手动操作：对象树搜索、可见/锁定切换、视窗点选、显示模式、绕 X/Y/Z 轴旋转、复制、可配置视觉切割预览/应用、适配视图、撤销/重做。
-- AI 操作：自然语言解析为白名单 JSON action，再由同一个 `OperationExecutor` 校验、预览、确认和执行。
+- AI 操作：自然语言通过本地 `agent-api` 生成白名单 `AgentResponse` / `OperationCommand` 草稿，再由同一个 `OperationExecutor` 校验、预览、确认和执行。
+- LLM 后端：`AGENT_MODE=mock` 默认不需要凭据；`AGENT_MODE=llm` 可接 OpenAI-compatible、Azure OpenAI 或 Azure AI Inference / AI Services endpoint。
+- 后端作业边界：真实几何切割、网格划分、求解器和结果摘要目前只生成 `backendJobDraft` 草稿，不会启动 worker 或修改三维场景。
 
 ## 可演示的 AI 命令
 
@@ -69,8 +71,11 @@ AI 面板会先展示解析结果、置信度和结构化 JSON。切割类操作
 
 ```text
 React Workbench UI
-  -> Agent Rule Parser
-  -> OperationCommand / OperationExecutor
+  -> AgentPanel / LlmAgentClient
+  -> Local agent-api (/api/agent/respond)
+  -> Mock or LLM provider
+  -> validated AgentResponse / OperationCommand draft
+  -> OperationExecutor
   -> SceneState / HistoryStore
   -> vtk.js Runtime
 ```
@@ -80,10 +85,15 @@ React Workbench UI
 - `src/viewer/vtkRuntime.ts`：vtk.js runtime wrapper，管理 renderer、actor、mapper、camera、clipping plane。
 - `src/viewer/sampleEngine.ts`：程序生成的涡扇发动机风格演示模型。
 - `src/domain/actions.ts`：三维操作 action schema。
+- `src/domain/protocol.ts`：AI 请求/响应协议，包括 action 草稿、计划、场景问答、宏草稿和后端作业草稿。
 - `src/domain/executor.ts`：手动 UI 和 AI 命令共用的执行器。
-- `src/agent/ruleParser.ts`：自然语言到 action JSON 的规则解析器。
+- `src/agent/context.ts`：发送给 agent 的紧凑场景上下文，避免传递原始几何数据。
+- `src/agent/adapters.ts`：前端 agent adapter，包括本地 API client 和离线规则解析器 adapter。
+- `backend/agent-api/src/`：本地 agent API、mock agent、LLM provider client、schema 和服务端校验/归一化。
 - `src/components/`：工作台 UI 组件。
 - `scripts/smoke-browser.mjs`：用本机 Chrome DevTools 协议验证默认浏览器演示路径。
+
+更完整的实现细节见：`docs/designs/agent-runtime-implementation.md`。
 
 ## 公开模型资源调研
 
@@ -99,7 +109,6 @@ React Workbench UI
 
 ## 后续增强方向
 
-- 接入真实 LLM tool calling adapter，复用当前 action schema。
-- 增加真实几何切割、截面曲线、VTU 非结构网格、标量场着色和 color map。
+- 增加真实几何切割 job worker、截面曲线、VTU 非结构网格、标量场着色和 color map。
 - 增加项目 JSON 保存/恢复、截图导出、网格导出。
 - 大文件导入迁移到 Web Worker 或后端 VTK 转换服务。

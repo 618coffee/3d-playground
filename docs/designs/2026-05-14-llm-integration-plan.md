@@ -6,6 +6,15 @@ Implemented through the local-first integration baseline.
 
 The workbench now has shared runtime protocol validation, async agent adapters, compact scene context, a review-oriented AI panel, multi-step viewer plans, a local agent API skeleton, Docker Compose wiring, and explicit future backend job boundaries. True geometry processing, meshing, and solver execution remain job-worker follow-ups by design.
 
+## Current Implementation Notes
+
+- The default frontend path now calls `VITE_AGENT_API_URL || '/api/agent/respond'`. With Vite, `/api` is proxied to `http://127.0.0.1:8787`.
+- The rule parser adapter still exists as an offline implementation path, but the default app does not automatically fall back to it when the local API is unreachable; network/API failures are shown in the AI panel.
+- `AGENT_MODE=mock` is the default backend mode. `AGENT_MODE=llm` supports OpenAI-compatible, Azure OpenAI, and Azure AI Inference / AI Services endpoints.
+- For Azure AI Foundry model deployments in this repo, use the AI Services/Cognitive Services model endpoint, such as `https://<resource>.cognitiveservices.azure.com`; do not use the Foundry project endpoint as the chat completions base URL.
+- `backendJobDraft` and `BackendJob` types are protocol/UI foundations only. No queue, worker, solver, or geometry-processing backend is currently started.
+- Detailed implementation notes are now kept in `docs/designs/agent-runtime-implementation.md`.
+
 ## Context
 
 The current workbench already demonstrates natural-language 3D operations through a local rule parser. The next step is to integrate real LLM capability while keeping the CAD/CAE interaction model controlled, reversible, and auditable.
@@ -159,11 +168,11 @@ Do not send raw imported file contents, polygon buffers, vertex arrays, or full 
 
 1. User submits natural language.
 2. UI builds an `AgentRequest` from text, scene summary, pending command, and conversation history.
-3. `LlmAgentClient` calls the local Docker-backed LLM endpoint, or `RuleParserAdapter` handles the request locally as an offline fallback.
+3. `LlmAgentClient` calls the local Docker-backed agent endpoint. `RuleParserAdapter` remains available as an offline adapter path, but the default app does not switch to it after a network failure.
 4. Backend asks the LLM for a structured `AgentResponse`, then normalizes and validates it before returning.
 5. Frontend validates the response shape again with runtime guards or a schema library.
-6. Frontend normalizes command ids, source, raw text, confirmation defaults, and risk flags.
-7. Frontend performs local target/risk review before showing an action card.
+6. Backend normalizes command ids, source, raw text, confirmation defaults, and risk flags; the frontend performs another shape validation pass.
+7. Frontend performs local target/risk review before showing an action card or previewing a draft.
 8. User confirms execution.
 9. Browser-safe viewer commands run through `ViewerOperationExecutor` and record history.
 10. Future geometry or simulation commands should be submitted to a backend `JobExecutor` and reflected in the UI as jobs, not applied directly by the viewer.
@@ -206,7 +215,7 @@ Status: implemented.
 - Update `AgentPanel` to support loading, errors, retry, and cancellable requests.
 - Keep current behavior working with no network dependency.
 
-Implemented in `src/agent/adapters.ts` and `src/components/AgentPanel.tsx`. The frontend uses `VITE_AGENT_API_URL` when present and falls back to the local rule parser otherwise.
+Implemented in `src/agent/adapters.ts` and `src/components/AgentPanel.tsx`. The frontend uses `VITE_AGENT_API_URL` when present; otherwise it uses `/api/agent/respond`, which is expected to be served by the local agent API through the Vite proxy. The local rule parser adapter remains available, but is not the default network-failure fallback.
 
 ### Phase 3: Scene Context Layer
 
@@ -220,7 +229,7 @@ Implemented in `src/agent/context.ts`; tests assert that raw geometry and import
 
 ### Phase 4: Backend LLM Endpoint
 
-Status: implemented as local API skeleton with mock and OpenAI-compatible provider mode.
+Status: implemented as local API skeleton with mock, OpenAI-compatible, Azure OpenAI, and Azure AI Inference provider modes.
 
 - Add a small local backend/proxy endpoint such as `POST /api/agent/respond`.
 - Containerize the backend so it can run in Docker Desktop via Docker Compose.
@@ -253,7 +262,7 @@ npm run dev
 
 `npm run dev` uses the Vite dev proxy to forward `/api/agent/respond` to `http://127.0.0.1:8787`, so no frontend environment variable is required for the default Docker-backed local workflow.
 
-Default `AGENT_MODE=mock` needs no credentials. To use an OpenAI-compatible endpoint, set `AGENT_MODE=llm`, `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` in local environment variables or `.env`.
+Default `AGENT_MODE=mock` needs no credentials. To use an OpenAI-compatible endpoint, set `AGENT_MODE=llm`, `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` in local environment variables or `.env`. For Azure AI Inference / AI Services, set `LLM_PROVIDER=azure-ai-inference` and use the Cognitive Services model endpoint; the provider client appends `/openai/v1` when needed.
 
 ### Phase 5: AI Review UI
 
@@ -328,10 +337,8 @@ The LLM should be instructed to:
 - Classify commands as viewer-safe or backend-job-required.
 - Do not claim that a simulation result is known unless a solver or explicit result source produced it.
 
-## Open Questions
+## Remaining Open Questions
 
-- Which provider should the first backend use, and should it be OpenAI-only or provider-neutral?
-- Should the first Docker Compose setup containerize only the backend, or both frontend and backend?
 - Should low-risk commands like `resetView` and `selectMesh` auto-apply, or should all LLM commands require confirmation in v1?
 - Should conversation history persist across refreshes, or stay session-only?
 - Should the shared command schema live in a dedicated package now, or be mirrored between frontend and backend until the backend shape is stable?

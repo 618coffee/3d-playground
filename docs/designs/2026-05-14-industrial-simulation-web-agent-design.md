@@ -27,7 +27,20 @@ Implemented a runnable browser MVP for the AI-assisted industrial 3D mesh workbe
 ## Follow-Ups
 
 - Third-party aircraft engine models were researched, but the default sample remains procedural to avoid license and large-file distribution risk.
-- Real LLM tool calling, true baked geometry cutting, VTU/scalar field support, and export workflows remain enhancement work.
+- True baked geometry cutting, VTU/scalar field support, and export workflows remain enhancement work.
+
+## Current Implementation Delta
+
+The original design below is preserved as historical context. The current implementation has moved beyond the initial pure-frontend MVP in several ways:
+
+- A local `backend/agent-api` service now owns mock/LLM calls, provider credentials, response normalization, and server-side validation.
+- The default frontend AI path calls `/api/agent/respond` through the Vite proxy; it no longer relies on direct in-component rule parsing for the normal demo path.
+- `AgentResponse` now includes message, clarification, action draft, action plan, scene answer, macro draft, and backend job draft shapes.
+- `OperationCommand` now includes scale, visibility, lock, display mode, import, and clear/apply visual clip behavior in addition to the original select/rotate/clone/clip/reset commands.
+- There are two procedural sample workspaces: turbofan cutaway and robotic inspection cell.
+- Future true geometry or simulation work is represented as `backendJobDraft` and `BackendJob` protocol types, but no real worker is implemented yet.
+
+For the current technical implementation, see `docs/designs/agent-runtime-implementation.md`.
 
 ---
 
@@ -697,7 +710,7 @@ MVP 以静态前端应用方式部署即可：
 
 - 支持 VTU 和标量场着色。
 - 支持 scalar bar、color map、截面和数据探针。
-- 接入真实 LLM tool calling。
+- 在现有本地 LLM baseline 上扩展更深的 tool/function calling 编排。
 - 引入后端处理复杂切割和大文件。
 
 ## Acceptance Criteria
