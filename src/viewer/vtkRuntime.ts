@@ -18,14 +18,33 @@ import type { DisplayMode, MeshEntity, ProceduralGeometry, Vec3, VisualClip } fr
 type VtkActor = ReturnType<typeof vtkActor.newInstance>;
 type VtkMapper = ReturnType<typeof vtkMapper.newInstance>;
 type VtkGenericWindow = ReturnType<typeof vtkGenericRenderWindow.newInstance>;
+type VtkRenderer = ReturnType<VtkGenericWindow['getRenderer']>;
 type VtkCamera = ReturnType<ReturnType<VtkGenericWindow['getRenderer']>['getActiveCamera']>;
-type PickSubscription = { unsubscribe: () => void };
+type RuntimeSubscription = { unsubscribe: () => void };
+type ProjectingRenderWindow = {
+  getFramebufferSize: () => number[];
+  worldToDisplay: (xCoordinate: number, yCoordinate: number, zCoordinate: number, renderer: VtkRenderer) => number[];
+};
+type ViewportGuideInteractor = {
+  onAnimation?: (callback: () => void) => RuntimeSubscription;
+  onEndAnimation?: (callback: () => void) => RuntimeSubscription;
+};
 
 type RuntimeRecord = {
   mesh: MeshEntity;
   actors: VtkActor[];
   mappers: VtkMapper[];
   dataset?: unknown;
+};
+
+export type ViewportGuidePoint = { x: number; y: number };
+
+export type ViewportGuideSnapshot = {
+  viewport: { width: number; height: number };
+  origin: ViewportGuidePoint;
+  axes: Record<'x' | 'y' | 'z', ViewportGuidePoint>;
+  triad: Record<'x' | 'y' | 'z', ViewportGuidePoint>;
+  gridLines: Array<{ id: string; axis: 'x' | 'y'; from: ViewportGuidePoint; to: ViewportGuidePoint }>;
 };
 
 export type LoadedMesh = {
@@ -51,6 +70,8 @@ export type VtkRuntime = {
   setViewScale: (scale: number) => void;
   resize: () => void;
   onPick: (callback: (meshId: string) => void) => () => void;
+  getViewportGuides: () => ViewportGuideSnapshot | null;
+  onViewportGuidesChange: (callback: () => void) => () => void;
   render: () => void;
   loadFile: (file: File) => Promise<LoadedMesh>;
 };
@@ -61,10 +82,30 @@ export function createVtkRuntime(): VtkRuntime {
   let viewScale = 1;
   let viewportHeight: number | undefined;
   let pickCallback: ((meshId: string) => void) | undefined;
-  let pickSubscription: PickSubscription | undefined;
+  let pickSubscription: RuntimeSubscription | undefined;
+  let guideUpdateFrame: number | undefined;
+  let guideSubscriptions: RuntimeSubscription[] = [];
   const records = new Map<string, RuntimeRecord>();
+  const guideCallbacks = new Set<() => void>();
 
-  const render = () => genericWindow?.getRenderWindow().render();
+  const emitViewportGuideChange = () => {
+    guideUpdateFrame = undefined;
+    guideCallbacks.forEach((callback) => callback());
+  };
+
+  const requestViewportGuideChange = () => {
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      emitViewportGuideChange();
+      return;
+    }
+    if (guideUpdateFrame !== undefined) return;
+    guideUpdateFrame = window.requestAnimationFrame(emitViewportGuideChange);
+  };
+
+  const render = () => {
+    genericWindow?.getRenderWindow().render();
+    requestViewportGuideChange();
+  };
 
   return {
     mount(container) {
@@ -77,11 +118,18 @@ export function createVtkRuntime(): VtkRuntime {
       configurePicking(genericWindow, records, (meshId) => pickCallback?.(meshId), (subscription) => {
         pickSubscription = subscription;
       });
+      guideSubscriptions = subscribeViewportGuideUpdates(genericWindow, requestViewportGuideChange);
       this.resetView();
     },
     dispose() {
       pickSubscription?.unsubscribe();
       pickSubscription = undefined;
+      guideSubscriptions.forEach((subscription) => subscription.unsubscribe());
+      guideSubscriptions = [];
+      if (guideUpdateFrame !== undefined && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(guideUpdateFrame);
+        guideUpdateFrame = undefined;
+      }
       genericWindow?.delete();
       genericWindow = undefined;
     },
@@ -250,6 +298,15 @@ export function createVtkRuntime(): VtkRuntime {
         if (pickCallback === callback) pickCallback = undefined;
       };
     },
+    getViewportGuides() {
+      return createViewportGuideSnapshot(genericWindow, records);
+    },
+    onViewportGuidesChange(callback) {
+      guideCallbacks.add(callback);
+      return () => {
+        guideCallbacks.delete(callback);
+      };
+    },
     render,
     async loadFile(file) {
       const extension = file.name.split('.').pop()?.toLowerCase();
@@ -306,7 +363,7 @@ function configurePicking(
   genericWindow: VtkGenericWindow,
   records: Map<string, RuntimeRecord>,
   callback: (meshId: string) => void,
-  setSubscription: (subscription: PickSubscription) => void,
+  setSubscription: (subscription: RuntimeSubscription) => void,
 ): void {
   const interactor = genericWindow.getInteractor();
   const renderer = genericWindow.getRenderer();
@@ -327,6 +384,108 @@ function configurePicking(
     if (meshId) callback(meshId);
   });
   setSubscription(subscription);
+}
+
+function subscribeViewportGuideUpdates(genericWindow: VtkGenericWindow, callback: () => void): RuntimeSubscription[] {
+  const renderer = genericWindow.getRenderer();
+  const camera = renderer.getActiveCamera();
+  const interactor = genericWindow.getInteractor() as unknown as ViewportGuideInteractor;
+  const subscriptions: RuntimeSubscription[] = [camera.onModified(callback)];
+  const animationSubscription = interactor.onAnimation?.(callback);
+  const endAnimationSubscription = interactor.onEndAnimation?.(callback);
+  if (animationSubscription) subscriptions.push(animationSubscription);
+  if (endAnimationSubscription) subscriptions.push(endAnimationSubscription);
+  return subscriptions;
+}
+
+function createViewportGuideSnapshot(genericWindow: VtkGenericWindow | undefined, records: Map<string, RuntimeRecord>): ViewportGuideSnapshot | null {
+  if (!genericWindow) return null;
+  const container = genericWindow.getContainer();
+  const bounds = container?.getBoundingClientRect();
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null;
+
+  const renderer = genericWindow.getRenderer();
+  const renderWindow = genericWindow.getApiSpecificRenderWindow() as unknown as ProjectingRenderWindow;
+  const framebufferSize = renderWindow.getFramebufferSize();
+  const framebufferWidth = framebufferSize[0];
+  const framebufferHeight = framebufferSize[1];
+  if (!framebufferWidth || !framebufferHeight) return null;
+
+  const project = (point: Vec3): ViewportGuidePoint | null => {
+    const displayPoint = renderWindow.worldToDisplay(point[0], point[1], point[2], renderer);
+    if (!displayPoint.every(Number.isFinite)) return null;
+    return {
+      x: roundPixel((displayPoint[0] / framebufferWidth) * bounds.width),
+      y: roundPixel(bounds.height - (displayPoint[1] / framebufferHeight) * bounds.height),
+    };
+  };
+
+  const step = viewportGuideStep(records);
+  const limit = step * 4;
+  const axisLength = step * 3;
+  const origin = project([0, 0, 0]);
+  const xAxis = project([axisLength, 0, 0]);
+  const yAxis = project([0, axisLength, 0]);
+  const zAxis = project([0, 0, axisLength]);
+  if (!origin || !xAxis || !yAxis || !zAxis) return null;
+
+  const gridLines: ViewportGuideSnapshot['gridLines'] = [];
+  for (let gridIndex = -4; gridIndex <= 4; gridIndex += 1) {
+    const coordinate = gridIndex * step;
+    const xLineStart = project([-limit, coordinate, 0]);
+    const xLineEnd = project([limit, coordinate, 0]);
+    const yLineStart = project([coordinate, -limit, 0]);
+    const yLineEnd = project([coordinate, limit, 0]);
+    if (xLineStart && xLineEnd) gridLines.push({ id: `x-${gridIndex}`, axis: 'x', from: xLineStart, to: xLineEnd });
+    if (yLineStart && yLineEnd) gridLines.push({ id: `y-${gridIndex}`, axis: 'y', from: yLineStart, to: yLineEnd });
+  }
+
+  return {
+    viewport: { width: roundPixel(bounds.width), height: roundPixel(bounds.height) },
+    origin,
+    axes: { x: xAxis, y: yAxis, z: zAxis },
+    triad: {
+      x: guideDirection(origin, xAxis, [1, -0.15]),
+      y: guideDirection(origin, yAxis, [-0.72, -0.68]),
+      z: guideDirection(origin, zAxis, [0.2, -0.98]),
+    },
+    gridLines,
+  };
+}
+
+function viewportGuideStep(records: Map<string, RuntimeRecord>): number {
+  let maximumExtent = 40;
+  records.forEach((record) => {
+    const position = record.mesh.transform.position;
+    record.mesh.bounds.forEach((bound, boundIndex) => {
+      const axisIndex = Math.floor(boundIndex / 2) as 0 | 1 | 2;
+      maximumExtent = Math.max(maximumExtent, Math.abs(bound + position[axisIndex]));
+    });
+  });
+  return niceGuideStep(maximumExtent / 4);
+}
+
+function niceGuideStep(rawStep: number): number {
+  if (!Number.isFinite(rawStep) || rawStep <= 0) return 10;
+  const exponent = Math.floor(Math.log10(rawStep));
+  const base = 10 ** exponent;
+  const normalized = rawStep / base;
+  if (normalized <= 1) return base;
+  if (normalized <= 2) return 2 * base;
+  if (normalized <= 5) return 5 * base;
+  return 10 * base;
+}
+
+function guideDirection(origin: ViewportGuidePoint, endpoint: ViewportGuidePoint, fallback: [number, number]): ViewportGuidePoint {
+  const deltaX = endpoint.x - origin.x;
+  const deltaY = endpoint.y - origin.y;
+  const length = Math.hypot(deltaX, deltaY);
+  if (!Number.isFinite(length) || length < 0.001) return { x: fallback[0], y: fallback[1] };
+  return { x: roundPixel(deltaX / length), y: roundPixel(deltaY / length) };
+}
+
+function roundPixel(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function createProceduralRecord(mesh: MeshEntity): RuntimeRecord {

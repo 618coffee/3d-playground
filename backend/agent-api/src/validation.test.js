@@ -63,3 +63,29 @@ test('normalizes schema-wrapper actions returned by an LLM', () => {
   assert.equal(response.action.source, 'agent');
   assert.equal(response.action.rawText, '把当前对象绕 Z 轴旋转 30 度');
 });
+
+test('normalizes boolean-like strings in LLM clone payloads', () => {
+  const response = validateAgentResponse({
+    kind: 'actionDraft',
+    action: {
+      id: 'clone-1',
+      type: 'cloneMesh',
+      target: { source: 'selection' },
+      params: {
+        count: 3,
+        offset: [20, 0, 0],
+        unit: 'mm',
+        shareGeometry: 'true',
+        namePattern: '{name}-copy-{n}',
+      },
+      source: 'agent',
+      rawText: '复制 3 个对象',
+    },
+    explanation: 'Clone the selected mesh.',
+    confidence: 0.94,
+  }, request);
+
+  assert.equal(response.kind, 'actionDraft');
+  assert.equal(response.action.type, 'cloneMesh');
+  assert.equal(response.action.params.shareGeometry, true);
+});

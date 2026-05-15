@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ViewerPanel } from './ViewerPanel';
+import type { OperationCommand } from '../domain/actions';
 import type { VtkRuntime } from '../viewer/vtkRuntime';
 
 class ResizeObserverStub {
@@ -8,7 +9,48 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
-function createRuntimeStub(): VtkRuntime {
+type GuideSnapshot = {
+  viewport: { width: number; height: number };
+  origin: { x: number; y: number };
+  axes: {
+    x: { x: number; y: number };
+    y: { x: number; y: number };
+    z: { x: number; y: number };
+  };
+  triad: {
+    x: { x: number; y: number };
+    y: { x: number; y: number };
+    z: { x: number; y: number };
+  };
+  gridLines: Array<{ id: string; axis: 'x' | 'y'; from: { x: number; y: number }; to: { x: number; y: number } }>;
+};
+
+type RuntimeStub = VtkRuntime & {
+  emitViewportGuideChange: (snapshot: GuideSnapshot) => void;
+};
+
+const initialGuideSnapshot: GuideSnapshot = {
+  viewport: { width: 640, height: 420 },
+  origin: { x: 300, y: 230 },
+  axes: {
+    x: { x: 380, y: 226 },
+    y: { x: 270, y: 174 },
+    z: { x: 306, y: 146 },
+  },
+  triad: {
+    x: { x: 0.98, y: -0.05 },
+    y: { x: -0.47, y: -0.88 },
+    z: { x: 0.07, y: -1 },
+  },
+  gridLines: [
+    { id: 'x--1', axis: 'x', from: { x: 224, y: 272 }, to: { x: 406, y: 262 } },
+    { id: 'y--1', axis: 'y', from: { x: 254, y: 300 }, to: { x: 206, y: 162 } },
+  ],
+};
+
+function createRuntimeStub(snapshot: GuideSnapshot = initialGuideSnapshot): RuntimeStub {
+  let guideSnapshot = snapshot;
+  const callbacks = new Set<() => void>();
   return {
     mount: vi.fn(),
     dispose: vi.fn(),
@@ -29,12 +71,119 @@ function createRuntimeStub(): VtkRuntime {
     setViewScale: vi.fn(),
     resize: vi.fn(),
     onPick: vi.fn(() => vi.fn()),
+    getViewportGuides: vi.fn(() => guideSnapshot),
+    onViewportGuidesChange: vi.fn((callback: () => void) => {
+      callbacks.add(callback);
+      return () => callbacks.delete(callback);
+    }),
+    emitViewportGuideChange: (nextSnapshot: GuideSnapshot) => {
+      guideSnapshot = nextSnapshot;
+      callbacks.forEach((callback) => callback());
+    },
     render: vi.fn(),
     loadFile: vi.fn(),
-  } as unknown as VtkRuntime;
+  } as unknown as RuntimeStub;
 }
 
 describe('ViewerPanel', () => {
+  it('shows coordinate axes and lets users toggle the world grid', () => {
+    globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+
+    render(
+      <ViewerPanel
+        runtime={createRuntimeStub()}
+        meshCount={1}
+        selectedName="Fan"
+        viewScale={1}
+        displayMode="surface"
+        onDisplayModeChange={vi.fn()}
+        onResetView={vi.fn()}
+        onRotateSelection={vi.fn()}
+        onViewScaleChange={vi.fn()}
+        onDropFile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('坐标轴指示器')).toHaveTextContent('X');
+    expect(screen.getByLabelText('坐标轴指示器')).toHaveTextContent('Y');
+    expect(screen.getByLabelText('坐标轴指示器')).toHaveTextContent('Z');
+    expect(document.querySelector('.world-grid-overlay')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '隐藏坐标网格' }));
+
+    expect(document.querySelector('.world-grid-overlay')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '显示坐标网格' })).toBeInTheDocument();
+  });
+
+  it('updates projected guide geometry when the runtime camera changes', () => {
+    globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+    const runtime = createRuntimeStub();
+
+    render(
+      <ViewerPanel
+        runtime={runtime}
+        meshCount={1}
+        selectedName="Fan"
+        viewScale={1}
+        displayMode="surface"
+        onDisplayModeChange={vi.fn()}
+        onResetView={vi.fn()}
+        onRotateSelection={vi.fn()}
+        onViewScaleChange={vi.fn()}
+        onDropFile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('world-axis-x')).toHaveAttribute('x2', '380');
+
+    act(() => {
+      runtime.emitViewportGuideChange({
+        ...initialGuideSnapshot,
+        origin: { x: 248, y: 256 },
+        axes: {
+          x: { x: 318, y: 294 },
+          y: { x: 210, y: 196 },
+          z: { x: 254, y: 154 },
+        },
+      });
+    });
+
+    expect(screen.getByTestId('world-axis-x')).toHaveAttribute('x1', '248');
+    expect(screen.getByTestId('world-axis-x')).toHaveAttribute('x2', '318');
+    expect(screen.getByTestId('world-axis-y')).toHaveAttribute('y2', '196');
+  });
+
+  it('annotates clone draft spacing in the viewport', () => {
+    globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+    const pendingCommand: OperationCommand = {
+      id: 'clone-preview-1',
+      type: 'cloneMesh',
+      target: { source: 'selection' },
+      params: { count: 3, offset: [20, 0, 0], unit: 'mm', shareGeometry: true, namePattern: '{name}-copy-{n}' },
+      source: 'agent',
+      confirmed: false,
+    };
+
+    render(
+      <ViewerPanel
+        runtime={createRuntimeStub()}
+        meshCount={1}
+        selectedName="Fan"
+        viewScale={1}
+        displayMode="surface"
+        pendingCommand={pendingCommand}
+        onDisplayModeChange={vi.fn()}
+        onResetView={vi.fn()}
+        onRotateSelection={vi.fn()}
+        onViewScaleChange={vi.fn()}
+        onDropFile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('X 间距 20 mm')).toBeInTheDocument();
+    expect(screen.getByText('3 个复制体')).toBeInTheDocument();
+  });
+
   it('offers high view scale ratios up to 400 percent', () => {
     globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
     const onViewScaleChange = vi.fn();

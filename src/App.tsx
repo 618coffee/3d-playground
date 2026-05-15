@@ -284,6 +284,7 @@ export default function App() {
               selectedName={selectedLabel}
               viewScale={viewScale}
               displayMode={scene.displayMode}
+              pendingCommand={pendingCommand}
               onDisplayModeChange={setDisplayMode}
               onDropFile={importFile}
               onRotateSelection={rotateSelectionFromDrag}

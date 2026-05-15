@@ -477,6 +477,11 @@ function enumValue(value, allowed, path) {
 
 function booleanValue(value, path) {
   if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
   throw new HttpError(502, 'invalid_schema_value', `${path} must be a boolean.`);
 }
 
