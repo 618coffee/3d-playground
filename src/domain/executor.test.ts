@@ -253,4 +253,21 @@ describe('operation executor', () => {
     expect(rotateResult.status).toBe('failed');
     expect(history.current().meshes.find((item) => item.id === 'locked-1')?.visible).toBe(false);
   });
+
+  it('rejects malformed agent payloads before touching scene state', () => {
+    const history = createHistoryStore(createInitialScene([mesh]));
+    const executor = createOperationExecutor(history);
+
+    const result = executor.execute({
+      id: 'bad-agent-command',
+      type: 'rotateMesh',
+      target: { meshId: 'fan-1' },
+      params: { axis: 'z', angleDeg: 'thirty', pivot: 'boundsCenter', space: 'world' },
+      source: 'agent',
+    } as unknown as OperationCommand);
+
+    expect(result.status).toBe('failed');
+    expect(history.current().meshes[0].transform.rotationDeg).toEqual([0, 0, 0]);
+    expect(history.entries()).toHaveLength(0);
+  });
 });

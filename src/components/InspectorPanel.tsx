@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Bot, Boxes, Check, PanelRightClose, SlidersHorizontal, X } from 'lucide-react';
-import type { MeshEntity, OperationCommand } from '../domain/actions';
+import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
+import type { HistoryEntry } from '../domain/history';
 import type { SceneState } from '../domain/scene';
 import { AgentPanel } from './AgentPanel';
 
@@ -8,14 +9,16 @@ type InspectorPanelProps = {
   scene: SceneState;
   selectedMesh?: MeshEntity;
   selectedMeshes: MeshEntity[];
+  historyEntries: HistoryEntry[];
   pendingCommand: OperationCommand | null;
   onConfirmPending: () => void;
   onCancelPending: () => void;
-  onExecute: (command: OperationCommand) => void;
+  onExecute: (command: OperationCommand) => ActionResult;
+  onPreviewDraft?: (command: OperationCommand) => void;
   onHidePanel?: () => void;
 };
 
-export function InspectorPanel({ scene, selectedMesh, selectedMeshes, pendingCommand, onConfirmPending, onCancelPending, onExecute, onHidePanel }: InspectorPanelProps) {
+export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEntries, pendingCommand, onConfirmPending, onCancelPending, onExecute, onPreviewDraft, onHidePanel }: InspectorPanelProps) {
   const [tab, setTab] = useState<'properties' | 'operations' | 'agent'>('agent');
 
   return (
@@ -36,7 +39,7 @@ export function InspectorPanel({ scene, selectedMesh, selectedMeshes, pendingCom
       <PendingActionCard command={pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
       {tab === 'properties' ? <PropertiesTab mesh={selectedMesh} selectedMeshes={selectedMeshes} /> : null}
       {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} selectedCount={selectedMeshes.length} scene={scene} onExecute={onExecute} /> : null}
-      {tab === 'agent' ? <AgentPanel scene={scene} onExecute={onExecute} /> : null}
+      {tab === 'agent' ? <AgentPanel scene={scene} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
     </aside>
   );
 }
@@ -104,7 +107,7 @@ function PropertiesTab({ mesh, selectedMeshes }: { mesh?: MeshEntity; selectedMe
   );
 }
 
-function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { selectedMesh?: MeshEntity; selectedCount: number; scene: SceneState; onExecute: (command: OperationCommand) => void }) {
+function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { selectedMesh?: MeshEntity; selectedCount: number; scene: SceneState; onExecute: (command: OperationCommand) => ActionResult }) {
   const [angle, setAngle] = useState(30);
   const [cloneCount, setCloneCount] = useState(2);
   const [cloneAxis, setCloneAxis] = useState<'x' | 'y' | 'z'>('x');

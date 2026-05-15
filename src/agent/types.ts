@@ -1,4 +1,5 @@
 import type { OperationCommand } from '../domain/actions';
+import type { AgentAdapter, AgentRequest, AgentResponse } from '../domain/protocol';
 import type { SceneState } from '../domain/scene';
 
 export type AgentParseResult =
@@ -22,3 +23,5 @@ export type AgentParseResult =
 export type AgentParser = {
   parse: (text: string, scene: SceneState) => AgentParseResult;
 };
+
+export type { AgentAdapter, AgentRequest, AgentResponse };

@@ -1,6 +1,7 @@
 import type { ActionResult, DisplayMode, MeshEntity, MeshTarget, OperationCommand, Vec3, VisualClip } from './actions';
 import type { HistoryStore } from './history';
 import { addVec3, cloneMeshEntity, type SceneState } from './scene';
+import { validateOperationCommand } from './validators';
 
 export type ViewerRuntimePort = {
   rotateMesh?: (meshId: string, axis: 'x' | 'y' | 'z' | Vec3, angleDeg: number) => void;
@@ -18,9 +19,13 @@ export type OperationExecutor = {
   execute: (command: OperationCommand) => ActionResult;
 };
 
-export function createOperationExecutor(history: HistoryStore, runtime?: ViewerRuntimePort): OperationExecutor {
+export type ViewerOperationExecutor = OperationExecutor;
+
+export function createOperationExecutor(history: HistoryStore, runtime?: ViewerRuntimePort): ViewerOperationExecutor {
   return {
     execute(command) {
+      const shapeValidation = validateOperationCommand(command);
+      if (!shapeValidation.ok) return failed(getActionId(command), shapeValidation.error);
       const scene = history.current();
       const targetIds = resolveTargetIds(command.target, scene, canTargetHidden(command));
       const validationError = validateCommand(command, scene, targetIds);
@@ -264,6 +269,13 @@ function failed(actionId: string, message: string): ActionResult {
     requiresConfirmation: false,
     warnings: [],
   };
+}
+
+function getActionId(command: unknown): string {
+  if (typeof command === 'object' && command !== null && 'id' in command && typeof command.id === 'string') {
+    return command.id;
+  }
+  return 'invalid-command';
 }
 
 function successMessage(command: OperationCommand): string {

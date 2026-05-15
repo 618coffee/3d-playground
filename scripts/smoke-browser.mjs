@@ -41,6 +41,15 @@ try {
   const smokeResult = await evaluate(client, async () => {
     const byText = (text) => [...document.querySelectorAll('button, span, strong, div')].find((item) => item.textContent?.includes(text));
     const byTitle = (title) => document.querySelector(`[title="${title}"]`);
+    const waitForUi = async (predicate, timeoutMs = 2000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const value = predicate();
+        if (value) return value;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      return predicate();
+    };
     const visibleCanvasMetrics = () => {
       const canvas = document.querySelector('canvas');
       if (!(canvas instanceof HTMLCanvasElement)) {
@@ -62,11 +71,12 @@ try {
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     const parseButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('解析'));
     parseButton?.click();
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    const executeButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('执行'));
+    const executeButton = await waitForUi(() => [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('执行')), 20_000);
     executeButton?.click();
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    const hasStatus = Boolean(byText('已旋转 30 度'));
+    const hasStatus = Boolean(await waitForUi(() => byText('已旋转 30 度'), 1200));
+    const statusTexts = [
+      ...document.querySelectorAll('.history-header-actions span, .agent-message p, .agent-review-card strong, .agent-review-card p, button'),
+    ].map((item) => item.textContent?.trim()).filter(Boolean).slice(0, 24);
     const rotationSkippedTimeline = !timelineTypes().includes('rotateMesh');
 
     const workspaceSelect = document.querySelector('.workspace-select select');
@@ -178,7 +188,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 80));
     const panelsRestored = Boolean(document.querySelector('.left-panel') && document.querySelector('.right-panel') && document.querySelector('.history-panel'));
 
-    return { hasCanvas, canvasVisible, hasSample, rotationSkippedTimeline, hasStatus, hasRobotSample, robotCanvasVisible, selectedRows, dragRotateAvailable, dragRotateSkippedTimeline, panelsHidden, restoreButtonsVisible, restoredFromCanvas, layoutRectsAligned, resizedLeftPanel, initialScaleMidpoint, scaleRangeBounded, customScaleUpdatesNumber, hasViewScaleStatus, viewScaleSkippedTimeline, viewScaleInViewport, viewScaleInInspector, objectScaleRemoved, panelsRestored };
+    return { hasCanvas, canvasVisible, hasSample, rotationSkippedTimeline, hasStatus, statusTexts, hasRobotSample, robotCanvasVisible, selectedRows, dragRotateAvailable, dragRotateSkippedTimeline, panelsHidden, restoreButtonsVisible, restoredFromCanvas, layoutRectsAligned, resizedLeftPanel, initialScaleMidpoint, scaleRangeBounded, customScaleUpdatesNumber, hasViewScaleStatus, viewScaleSkippedTimeline, viewScaleInViewport, viewScaleInInspector, objectScaleRemoved, panelsRestored };
   });
 
   if (

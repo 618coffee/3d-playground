@@ -4,10 +4,10 @@ import { ObjectTree } from './components/ObjectTree';
 import { ViewerPanel } from './components/ViewerPanel';
 import { InspectorPanel } from './components/InspectorPanel';
 import { HistoryTimeline } from './components/HistoryTimeline';
-import type { DisplayMode, OperationCommand } from './domain/actions';
+import type { ActionResult, DisplayMode, OperationCommand } from './domain/actions';
 import { createOperationExecutor } from './domain/executor';
 import { createHistoryStore, type HistoryStore } from './domain/history';
-import { createInitialScene, type SceneState } from './domain/scene';
+import { cloneMeshEntity, createInitialScene, type SceneState } from './domain/scene';
 import { SAMPLE_WORKSPACES, createSampleWorkspace, type SampleWorkspaceId } from './viewer/sampleEngine';
 import { createVtkRuntime } from './viewer/vtkRuntime';
 
@@ -70,7 +70,10 @@ export default function App() {
     loadWorkspace('turbofan');
   }, [loadWorkspace]);
 
-  const execute = useCallback((command: OperationCommand) => {
+  const execute = useCallback((command: OperationCommand): ActionResult => {
+    if (pendingCommand?.source === 'agent' && pendingCommand.id === command.id && isRuntimePreviewCommand(pendingCommand)) {
+      restoreRuntimeScene(runtime, historyRef.current.current(), datasetsRef.current);
+    }
     const executor = createOperationExecutor(historyRef.current, runtime);
     const before = historyRef.current.current();
     const result = executor.execute(command);
@@ -84,7 +87,8 @@ export default function App() {
       copyDatasetRefsForClones(before, after, datasetsRef.current);
     }
     refreshFromHistory(result.message);
-  }, [refreshFromHistory, runtime]);
+    return result;
+  }, [pendingCommand, refreshFromHistory, runtime]);
 
   const confirmPending = useCallback(() => {
     if (!pendingCommand) return;
@@ -92,12 +96,24 @@ export default function App() {
   }, [execute, pendingCommand]);
 
   const cancelPending = useCallback(() => {
-    if (pendingCommand?.type === 'clipMesh') {
-      pendingCommandTargetIds(pendingCommand, historyRef.current.current()).forEach((meshId) => runtime.clearClip(meshId));
+    if (pendingCommand && isRuntimePreviewCommand(pendingCommand)) {
       restoreRuntimeScene(runtime, historyRef.current.current(), datasetsRef.current);
     }
     setPendingCommand(null);
     setLastMessage('已取消待确认操作。');
+  }, [pendingCommand, runtime]);
+
+  const previewDraft = useCallback((command: OperationCommand) => {
+    if (pendingCommand?.source === 'agent' && isRuntimePreviewCommand(pendingCommand)) {
+      restoreRuntimeScene(runtime, historyRef.current.current(), datasetsRef.current);
+    }
+    if (command.type !== 'cloneMesh') return;
+    const sceneSnapshot = historyRef.current.current();
+    const targetIds = pendingCommandTargetIds(command, sceneSnapshot);
+    if (targetIds.length === 0) return;
+    previewCloneDraft(runtime, sceneSnapshot, targetIds, command);
+    setPendingCommand(command);
+    setLastMessage('已生成复制预览，确认后写入历史。');
   }, [pendingCommand, runtime]);
 
   const importFile = useCallback(async (file: File) => {
@@ -296,10 +312,12 @@ export default function App() {
               scene={scene}
               selectedMesh={selectedMesh}
               selectedMeshes={selectedMeshes}
+              historyEntries={historyEntries}
               pendingCommand={pendingCommand}
               onConfirmPending={confirmPending}
               onCancelPending={cancelPending}
               onExecute={execute}
+              onPreviewDraft={previewDraft}
               onHidePanel={() => togglePanel('right')}
             />
           </div>
@@ -361,6 +379,29 @@ function restoreRuntimeScene(runtime: ReturnType<typeof createVtkRuntime>, scene
   runtime.clear();
   scene.meshes.forEach((mesh) => runtime.addMesh(mesh, datasets.get(mesh.id)));
   runtime.selectMeshes(scene.selection);
+}
+
+function previewCloneDraft(runtime: ReturnType<typeof createVtkRuntime>, scene: SceneState, targetIds: string[], command: Extract<OperationCommand, { type: 'cloneMesh' }>): void {
+  const cloneCount = Math.min(12, Math.max(1, Math.trunc(command.params.count)));
+  scene.meshes.forEach((mesh) => {
+    if (!targetIds.includes(mesh.id)) return;
+    for (let index = 1; index <= cloneCount; index += 1) {
+      const clone = cloneMeshEntity(mesh, {
+        id: `${mesh.id}-${command.id}-preview-${index}`,
+        name: command.params.namePattern.replace('{name}', mesh.name).replace('{n}', String(index)),
+        offset: multiplyVec3(command.params.offset, index),
+      });
+      runtime.cloneMesh(mesh.id, { ...clone, opacity: Math.min(clone.opacity, 0.45), selected: false });
+    }
+  });
+}
+
+function isRuntimePreviewCommand(command: OperationCommand): boolean {
+  return command.type === 'cloneMesh' || command.type === 'clipMesh';
+}
+
+function multiplyVec3(vector: [number, number, number], factor: number): [number, number, number] {
+  return [vector[0] * factor, vector[1] * factor, vector[2] * factor];
 }
 
 function copyDatasetRefsForClones(before: SceneState, after: SceneState, datasets: Map<string, unknown>): void {

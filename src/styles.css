@@ -792,6 +792,320 @@ label input[type='file'] {
   padding: 12px;
 }
 
+.agent-review-surface {
+  gap: 12px;
+  color: #dfe8f1;
+}
+
+.agent-prompt-card,
+.agent-review-card,
+.agent-conversation-feed,
+.agent-status-footer {
+  border: 1px solid #273341;
+  border-radius: 8px;
+  background: #101720;
+}
+
+.agent-prompt-card {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-prompt-label,
+.agent-review-head,
+.agent-status-footer,
+.agent-review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-prompt-label {
+  color: #dfe8f1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-mode-chip,
+.confidence-pill,
+.review-kicker {
+  border: 1px solid #334559;
+  border-radius: 999px;
+  background: #151f2a;
+  color: #a9bacb;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.agent-mode-chip {
+  color: #9fd7c3;
+  border-color: #2f5b4d;
+  background: #10211d;
+}
+
+.agent-prompt-card textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.agent-prompt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.agent-secondary-action {
+  color: #b8c7d8;
+  background: #121a23;
+}
+
+.agent-chip-row {
+  align-items: flex-start;
+}
+
+.agent-chip-row button,
+.agent-chip-row span {
+  max-width: 100%;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.agent-conversation-feed {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-message {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+}
+
+.agent-message + .agent-message {
+  border-top: 1px solid #1f2935;
+}
+
+.agent-message-role {
+  color: #8fa3b8;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.agent-message p {
+  margin: 0;
+  min-width: 0;
+  color: #c4d2e0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.agent-message.user p {
+  color: #f1f6fb;
+}
+
+.agent-review-card {
+  padding: 12px;
+}
+
+.agent-review-card.parse-card {
+  background: #101720;
+}
+
+.agent-review-head {
+  margin-bottom: 10px;
+}
+
+.agent-review-head div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-review-head strong {
+  min-width: 0;
+  color: #f1f6fb;
+  overflow-wrap: anywhere;
+}
+
+.review-kicker {
+  width: max-content;
+  color: #92b6cb;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.confidence-pill {
+  flex: 0 0 auto;
+  color: #b6e5d4;
+  border-color: #32604f;
+  background: #10221d;
+}
+
+.agent-review-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  border: 1px solid #243241;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.agent-review-row {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 7px 9px;
+  border-bottom: 1px solid #202b38;
+}
+
+.agent-review-row:last-child {
+  border-bottom: 0;
+}
+
+.agent-review-row span {
+  color: #8fa3b8;
+  font-size: 12px;
+}
+
+.agent-review-row strong {
+  min-width: 0;
+  color: #dfe8f1;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.agent-risk-note {
+  margin-bottom: 10px;
+  border-color: #725f33;
+  background: #211d14;
+}
+
+.agent-plan-review {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.agent-plan-step {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.agent-plan-step > span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #354658;
+  border-radius: 50%;
+  background: #121a23;
+  color: #9cafc4;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-plan-step.active > span {
+  color: #ebf8ff;
+  border-color: #2c89b5;
+  background: #123149;
+}
+
+.agent-plan-step strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #dfe8f1;
+  font-size: 12px;
+}
+
+.agent-plan-step p {
+  margin: 0;
+  color: #95a9bd;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.agent-review-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.agent-debug-drawer {
+  margin-top: 10px;
+  border-top: 1px solid #243241;
+  padding-top: 10px;
+}
+
+.agent-debug-drawer pre,
+.agent-review-card pre {
+  margin: 0;
+}
+
+.agent-status-footer {
+  min-height: 34px;
+  padding: 7px 10px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: #95a9bd;
+  font-size: 12px;
+}
+
+.agent-status-footer span:last-child {
+  margin-left: auto;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #63d0a6;
+  box-shadow: 0 0 0 3px rgba(99, 208, 166, 0.12);
+}
+
+.agent-status-footer.is-loading .status-dot {
+  background: #d8b663;
+  box-shadow: 0 0 0 3px rgba(216, 182, 99, 0.14);
+}
+
+.agent-status-footer.has-error .status-dot,
+.agent-review-card.blocked .review-kicker {
+  color: #f0b2b2;
+  border-color: #724040;
+  background: #251618;
+}
+
+.agent-review-card.needs-attention .review-kicker {
+  color: #e6c27c;
+  border-color: #725f33;
+  background: #211d14;
+}
+
+.agent-empty-state {
+  min-height: 64px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
 .pending-action-card {
   margin: 10px 12px 0;
   border: 1px solid #6d5a31;

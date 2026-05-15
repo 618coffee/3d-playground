@@ -6,10 +6,25 @@
 
 ```bash
 npm install
-npm run dev -- --host 127.0.0.1
+docker compose up --build -d agent-api
+npm run dev
 ```
 
 打开：`http://127.0.0.1:5173/`
+
+`npm run dev` 默认通过 Vite proxy 把 `/api/agent/respond` 转发到本机 Docker 后端 `http://127.0.0.1:8787`。如果后端没有启动，AI 面板会回退到本地规则解析器。
+
+如需接入 Azure AI Foundry / AI Services，把 `.env.example` 复制为 `.env` 后设置：
+
+```bash
+AGENT_MODE=llm
+LLM_PROVIDER=azure-ai-inference
+LLM_BASE_URL=https://<resource-name>.cognitiveservices.azure.com
+LLM_MODEL=<deployment-name>
+LLM_API_KEY=<resource-key>
+```
+
+注意 `LLM_BASE_URL` 要使用 AI Services/Cognitive Services 的模型 endpoint，不要使用形如 `https://<resource>.services.ai.azure.com/api/projects/<project>` 的 Foundry project endpoint；后者通常面向 project/agent 管理 API，不适合作为 API key 的 chat completions base URL。
 
 构建生产版本：
 
