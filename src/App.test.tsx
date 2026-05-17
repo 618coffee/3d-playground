@@ -188,6 +188,11 @@ describe('App agent draft previews', () => {
     expect(screen.getByRole('button', { name: '展开属性面板' })).toBeInTheDocument();
   });
 
+  it('draws the left sidebar boundary from the full stack', () => {
+    expect(appStyles).toMatch(/\.left-panel-stack\s*\{[^}]*border-right:\s*1px solid #26313d;/s);
+    expect(appStyles).toMatch(/\.left-object-tree-pane > \.left-panel\s*\{[^}]*border-right:\s*0;/s);
+  });
+
   it('keeps hidden panel slots mounted so layout collapse can animate', async () => {
     vi.stubGlobal('fetch', vi.fn());
 

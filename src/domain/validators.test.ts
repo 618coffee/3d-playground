@@ -29,6 +29,24 @@ describe('runtime validators', () => {
     expect(validateOperationCommand(command).ok).toBe(true);
   });
 
+  it('accepts relative mesh move commands and rejects malformed offsets', () => {
+    const command = {
+      id: 'move-1',
+      type: 'moveMesh',
+      target: { meshId: 'mesh-1' },
+      params: { offset: [10, -5, 2], unit: 'mm' },
+      source: 'agent',
+    };
+    const badOffset = {
+      ...command,
+      id: 'move-bad-offset',
+      params: { offset: [10, Number.NaN, 2], unit: 'mm' },
+    };
+
+    expect(validateOperationCommand(command).ok).toBe(true);
+    expect(validateOperationCommand(badOffset).ok).toBe(false);
+  });
+
   it('rejects LLM-like commands with arbitrary tool names or malformed params', () => {
     const arbitraryTool = {
       id: 'tool-1',

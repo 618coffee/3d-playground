@@ -111,6 +111,14 @@ export type OperationCommand =
       };
     })
   | (CommandMeta & {
+      type: 'moveMesh';
+      target: MeshTarget;
+      params: {
+        offset: Vec3;
+        unit: 'mm' | 'cm' | 'm' | 'model';
+      };
+    })
+  | (CommandMeta & {
       type: 'cloneMesh';
       target: MeshTarget;
       params: {

@@ -118,6 +118,7 @@ describe('buildAgentContext', () => {
     expect(context.supportedActions).toEqual([
       'selectMesh',
       'rotateMesh',
+      'moveMesh',
       'cloneMesh',
       'setMeshScale',
       'clipMesh',

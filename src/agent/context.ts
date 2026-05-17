@@ -11,6 +11,7 @@ type OperationActionName = OperationCommand['type'];
 export const SUPPORTED_ACTION_NAMES = [
   'selectMesh',
   'rotateMesh',
+  'moveMesh',
   'cloneMesh',
   'setMeshScale',
   'clipMesh',

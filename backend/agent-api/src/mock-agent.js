@@ -13,7 +13,7 @@ export function createMockAgentResponse(request) {
     };
   }
 
-  if (/(仿真|求解|solver|simulation|mesh|网格划分|真实切割|boolean|bake)/i.test(text)) {
+  if (/(仿真|求解|solver|simulation|meshing|网格划分|真实切割|boolean|bake)/i.test(text)) {
     return {
       kind: 'backendJobDraft',
       title: inferJobTitle(text),
@@ -79,6 +79,10 @@ function buildPlanSteps(request) {
     const action = rotateAction(request);
     if (action) steps.push({ id: 'step-rotate', title: '旋转对象', action, explanation: '旋转目标对象。', risk: deriveMockRisk(action) });
   }
+  if (/(移动|平移|move|translate|shift)/i.test(text)) {
+    const action = moveAction(request);
+    if (action) steps.push({ id: 'step-move', title: '移动对象', action, explanation: '移动目标对象。', risk: deriveMockRisk(action) });
+  }
   if (/(重置|复位|fit|reset)/i.test(text)) {
     const action = resetViewAction(request);
     steps.push({ id: 'step-reset', title: '适配视图', action, explanation: '重置并适配可见对象。', risk: deriveMockRisk(action) });
@@ -97,6 +101,7 @@ function inferSingleAction(request) {
   if (/(显示|show)/i.test(text)) return visibilityAction(request, true);
   if (/(锁定|lock)/i.test(text)) return lockAction(request, true);
   if (/(解锁|unlock)/i.test(text)) return lockAction(request, false);
+  if (/(移动|平移|move|translate|shift)/i.test(text)) return moveAction(request);
   if (/(复制|克隆|copy|clone|duplicate)/i.test(text)) return cloneAction(request);
   if (/(切|裁剪|剖|clip|cut|section|slice)/i.test(text)) return clipAction(request);
   if (/(旋转|rotate|turn|spin)/i.test(text)) return rotateAction(request);
@@ -131,6 +136,17 @@ function cloneAction(request) {
     unit: request.scene.unit,
     shareGeometry: true,
     namePattern: '{name}-copy-{n}',
+  });
+}
+
+function moveAction(request) {
+  const target = inferTarget(request, { allowSelection: true });
+  if (!target) return undefined;
+  const axis = inferAxis(request.text) ?? 'x';
+  const distance = inferDistance(request.text) ?? inferNumber(request.text) ?? 10;
+  return baseCommand(request, 'moveMesh', target, {
+    offset: axisVector(axis, distance),
+    unit: request.scene.unit,
   });
 }
 
@@ -259,6 +275,7 @@ function explainAction(action) {
   if (action.type === 'resetView') return '重置视角并适配可见对象。';
   if (action.type === 'setDisplayMode') return `切换显示模式为 ${action.params.mode}。`;
   if (action.type === 'rotateMesh') return `绕 ${Array.isArray(action.params.axis) ? action.params.axis.join(',') : action.params.axis.toUpperCase()} 轴旋转 ${action.params.angleDeg} 度。`;
+  if (action.type === 'moveMesh') return `移动 ${action.params.offset.join(', ')} ${action.params.unit}。`;
   if (action.type === 'cloneMesh') return `复制 ${action.params.count} 个对象。`;
   if (action.type === 'clipMesh') return '创建视觉切割预览。';
   if (action.type === 'selectMesh') return '选择匹配对象。';

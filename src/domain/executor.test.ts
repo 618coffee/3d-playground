@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { MeshEntity, OperationCommand } from './actions';
-import { createOperationExecutor } from './executor';
+import { createOperationExecutor, type ViewerRuntimePort } from './executor';
 import { createHistoryStore } from './history';
 import { createInitialScene } from './scene';
 
@@ -79,6 +79,28 @@ describe('operation executor', () => {
 
     expect(result.status).toBe('applied');
     expect(history.current().meshes[0].transform.rotationDeg).toEqual([0, 0, 30]);
+    expect(history.entries().map((entry) => entry.command)).toEqual([command]);
+  });
+
+  it('moves selected meshes by a relative offset and records the command', () => {
+    const history = createHistoryStore(createInitialScene([mesh]));
+    const runtime = { moveMesh: vi.fn() } as unknown as ViewerRuntimePort;
+    const executor = createOperationExecutor(history, runtime);
+    const command = {
+      id: 'move-1',
+      type: 'moveMesh',
+      target: { source: 'selection' },
+      params: { offset: [10, -5, 2], unit: 'mm' },
+      source: 'ui',
+      rawText: '手动移动 X=10 Y=-5 Z=2mm',
+    } as unknown as OperationCommand;
+
+    const result = executor.execute(command);
+
+    expect(result.status).toBe('applied');
+    expect(result.affectedMeshIds).toEqual(['fan-1']);
+    expect(history.current().meshes[0].transform.position).toEqual([10, -5, 2]);
+    expect(runtime.moveMesh).toHaveBeenCalledWith('fan-1', [10, -5, 2]);
     expect(history.entries().map((entry) => entry.command)).toEqual([command]);
   });
 

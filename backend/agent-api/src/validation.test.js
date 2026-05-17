@@ -118,6 +118,49 @@ test('normalizes schema-wrapper actions returned by an LLM', () => {
   assert.equal(response.action.rawText, '把当前对象绕 Z 轴旋转 30 度');
 });
 
+test('validates moveMesh action drafts returned by an LLM', () => {
+  const response = validateAgentResponse({
+    kind: 'actionDraft',
+    action: {
+      id: 'move-1',
+      type: 'moveMesh',
+      target: { source: 'selection' },
+      params: { offset: [10, -5, 2], unit: 'mm' },
+      source: 'agent',
+      rawText: '把当前对象沿 X 轴移动 10mm，沿 Y 轴移动 -5mm，沿 Z 轴移动 2mm',
+    },
+    explanation: 'Move the selected mesh by a relative offset.',
+    confidence: 0.9,
+  }, request);
+
+  assert.equal(response.kind, 'actionDraft');
+  assert.equal(response.action.type, 'moveMesh');
+  assert.deepEqual(response.action.params, { offset: [10, -5, 2], unit: 'mm' });
+  assert.equal(response.risk.requiresConfirmation, false);
+});
+
+test('normalizes schema-wrapper moveMesh commands returned by an LLM', () => {
+  const response = validateAgentResponse({
+    kind: 'actionDraft',
+    action: {
+      common: { source: 'agent', rawText: '把当前对象沿 X 轴移动 10mm', confirmed: false },
+      target: [{ source: 'selection' }],
+      commands: {
+        moveMesh: {
+          params: { offset: [10, 0, 0], unit: 'mm' },
+        },
+      },
+    },
+    explanation: 'Move selected mesh.',
+    confidence: 0.9,
+  }, request);
+
+  assert.equal(response.kind, 'actionDraft');
+  assert.equal(response.action.type, 'moveMesh');
+  assert.deepEqual(response.action.target, { source: 'selection' });
+  assert.deepEqual(response.action.params, { offset: [10, 0, 0], unit: 'mm' });
+});
+
 test('preserves mesh colors and derives color labels for provider targeting', () => {
   const colorRequest = validateAgentRequest({
     id: 'color-request',

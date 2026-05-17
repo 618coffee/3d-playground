@@ -1,6 +1,7 @@
 export const COMMAND_TYPES = [
   'selectMesh',
   'rotateMesh',
+  'moveMesh',
   'cloneMesh',
   'setMeshScale',
   'clipMesh',
@@ -107,6 +108,7 @@ export const OPERATION_COMMAND_SCHEMA = {
   paramsByType: {
     selectMesh: { params: { mode: ['replace', 'add', 'remove'] } },
     rotateMesh: { params: { axis: ['x', 'y', 'z', '[x,y,z]'], angleDeg: 'number', pivot: ['boundsCenter', 'origin', '[x,y,z]'], space: ['world', 'local'] } },
+    moveMesh: { params: { offset: '[x,y,z] relative movement in unit', unit: UNITS } },
     cloneMesh: { params: { count: 'integer 1..12', offset: '[x,y,z]', unit: UNITS, shareGeometry: 'boolean', namePattern: 'string with optional {name} and {n}' } },
     setMeshScale: { params: { scale: '[x,y,z], all > 0' } },
     clipMesh: {

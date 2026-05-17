@@ -8,15 +8,24 @@ Updated the manual operation tab to use denser controls for repeated edits and f
 
 Manual panel rotations now create operation timeline entries. Viewport drag rotation remains a current-scene update so it does not flood history.
 
+The four manual operation sections, `移动`, `旋转`, `复制`, and `切割`, are now individually collapsible with smooth height, opacity, and position transitions. Each section defaults to expanded, keeps a compact title row visible when collapsed, and exposes `aria-expanded` state for accessible keyboard/screen-reader use. The rotation header stays compact and no longer shows a selected-count suffix, and move units are shown inside the X/Y/Z numeric inputs instead of the section header.
+
+The left sidebar now draws its right boundary from the full-height stack container, so the border remains continuous when the properties pane is expanded below the object tree.
+
 ### Changed Files
 
 - `src/components/InspectorPanel.tsx`: reworked manual controls, added shared numeric stepper UI, set manual defaults, allowed numeric fields to be cleared before retyping, replaced clip selects with segmented controls, made clip preview show `清除切割` and `应用切割` only after preview, emitted raw text for manual operations.
+- `src/components/InspectorPanel.tsx`: added a shared collapsible tool-section wrapper for the four manual operation areas.
 - `src/App.tsx`: clear pending state for non-confirming previews so manual clip preview does not show a top confirmation card.
 - `src/styles.css`: styled numeric steppers, segmented controls, the horizontal clip action row, and the distinct clear/apply clip button colors.
+- `src/styles.css`: styled collapsible manual section headers, compact collapsed section spacing, and smooth body transition states.
+- `src/styles.css`: moved the left sidebar boundary to the full-height stack and added numeric input suffix styling.
 - `src/domain/executor.ts`: limited the rotate history suppression to viewport drag rotation.
 - `src/components/InspectorPanel.test.tsx`: covered the new manual control structure, clearable numeric inputs, disabled clone defaults, clone enablement after valid quantity/spacing, progressive clip preview/apply/clear actions, and per-axis rotate execution.
+- `src/components/InspectorPanel.test.tsx`: covered independent collapse/expand behavior for all four manual operation sections.
 - `src/domain/executor.test.ts`: covered manual rotation history recording and viewport drag suppression.
 - `src/App.test.tsx`: covered manual panel rotation appearing in the operation timeline and the inline clip preview/apply/clear flow.
+- `src/App.test.tsx`: covered the full-height left sidebar boundary style.
 
 ### Verification
 

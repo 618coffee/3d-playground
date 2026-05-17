@@ -183,6 +183,17 @@ export function validateOperationCommand(input, request) {
     };
   }
 
+  if (type === 'moveMesh') {
+    return {
+      ...common,
+      target,
+      params: {
+        offset: vec3(input.params?.offset, 'action.params.offset'),
+        unit: enumValue(input.params?.unit, UNITS, 'action.params.unit'),
+      },
+    };
+  }
+
   if (type === 'cloneMesh') {
     return {
       ...common,
@@ -495,6 +506,7 @@ function defaultExplanation(command) {
   if (command.type === 'resetView') return 'Reset the camera view.';
   if (command.type === 'setDisplayMode') return `Switch display mode to ${command.params.mode}.`;
   if (command.type === 'rotateMesh') return `Rotate the target ${command.params.angleDeg} degrees.`;
+  if (command.type === 'moveMesh') return `Move the target by ${command.params.offset.join(', ')} ${command.params.unit}.`;
   if (command.type === 'cloneMesh') return `Clone the target ${command.params.count} time(s).`;
   if (command.type === 'clipMesh') return 'Create a visual clipping draft for review.';
   return `Prepare ${command.type} for review.`;
@@ -504,6 +516,7 @@ function commandTitle(command) {
   if (command.type === 'resetView') return 'Reset view';
   if (command.type === 'setDisplayMode') return 'Set display mode';
   if (command.type === 'rotateMesh') return 'Rotate mesh';
+  if (command.type === 'moveMesh') return 'Move mesh';
   if (command.type === 'cloneMesh') return 'Clone mesh';
   if (command.type === 'clipMesh') return 'Preview clip';
   if (command.type === 'selectMesh') return 'Select mesh';

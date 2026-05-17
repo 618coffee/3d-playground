@@ -5,6 +5,7 @@ import { validateOperationCommand } from './validators';
 
 export type ViewerRuntimePort = {
   rotateMesh?: (meshId: string, axis: 'x' | 'y' | 'z' | Vec3, angleDeg: number) => void;
+  moveMesh?: (meshId: string, offset: Vec3) => void;
   setMeshScale?: (meshId: string, scale: Vec3) => void;
   cloneMesh?: (sourceId: string, clone: MeshEntity) => void;
   previewClip?: (meshId: string, clip: VisualClip) => void;
@@ -104,6 +105,18 @@ function applyToScene(
           },
         };
       }),
+    };
+  }
+
+  if (command.type === 'moveMesh') {
+    targetIds.forEach((meshId) => runtime?.moveMesh?.(meshId, command.params.offset));
+    return {
+      ...scene,
+      meshes: scene.meshes.map((mesh) => (
+        targetIds.includes(mesh.id)
+          ? { ...mesh, transform: { ...mesh.transform, position: addVec3(mesh.transform.position, command.params.offset) } }
+          : mesh
+      )),
     };
   }
 
@@ -281,6 +294,7 @@ function getActionId(command: unknown): string {
 
 function successMessage(command: OperationCommand): string {
   if (command.type === 'rotateMesh') return `已旋转 ${command.params.angleDeg} 度。`;
+  if (command.type === 'moveMesh') return `已移动 ${command.params.offset.join(', ')} ${command.params.unit}。`;
   if (command.type === 'cloneMesh') return `已复制 ${clampCloneCount(command.params.count)} 个对象。`;
   if (command.type === 'setMeshScale') return `已缩放对象到 ${command.params.scale[0].toFixed(2)}x。`;
   if (command.type === 'selectMesh') return '已更新选择。';
@@ -339,6 +353,9 @@ function validateCommand(command: OperationCommand, scene: SceneState, targetIds
     if (scene.meshes.some((mesh) => mesh.id === command.params.mesh.id)) return '导入对象 ID 已存在。';
   }
   if (command.type === 'rotateMesh' && !Number.isFinite(command.params.angleDeg)) return '旋转角度无效。';
+  if (command.type === 'moveMesh') {
+    if (!isValidVec3(command.params.offset)) return '移动偏移无效。';
+  }
   if (command.type === 'setMeshScale') {
     if (!isValidVec3(command.params.scale)) return '缩放比例无效。';
     if (command.params.scale.some((value) => value <= 0)) return '缩放比例必须大于 0。';

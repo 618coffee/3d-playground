@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useId, useMemo, useState } from 'react';
 import { Bot, Check, ChevronDown, ChevronUp, PanelRightClose, SlidersHorizontal, X } from 'lucide-react';
 import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import type { HistoryEntry } from '../domain/history';
@@ -38,7 +38,7 @@ export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEnt
         <button className={tab === 'agent' ? 'active' : ''} onClick={() => setTab('agent')}><Bot size={15} /> AI 助手</button>
       </div>
       <PendingActionCard command={pendingCommand?.source === 'agent' ? null : pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
-      {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} selectedCount={selectedMeshes.length} scene={scene} onExecute={onExecute} /> : null}
+      {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} scene={scene} onExecute={onExecute} /> : null}
       {tab === 'agent' ? <AgentPanel scene={scene} selectedMeshes={selectedMeshes} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onConfirmPending={onConfirmPending} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
     </aside>
   );
@@ -107,7 +107,8 @@ export function PropertiesPanel({ mesh, selectedMeshes }: { mesh?: MeshEntity; s
   );
 }
 
-function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { selectedMesh?: MeshEntity; selectedCount: number; scene: SceneState; onExecute: (command: OperationCommand) => ActionResult }) {
+function OperationsTab({ selectedMesh, scene, onExecute }: { selectedMesh?: MeshEntity; scene: SceneState; onExecute: (command: OperationCommand) => ActionResult }) {
+  const [moveOffsets, setMoveOffsets] = useState<Record<'x' | 'y' | 'z', number>>({ x: 0, y: 0, z: 0 });
   const [rotationAngles, setRotationAngles] = useState<Record<'x' | 'y' | 'z', number>>({ x: 0, y: 0, z: 0 });
   const [cloneCount, setCloneCount] = useState(0);
   const [cloneAxis, setCloneAxis] = useState<'x' | 'y' | 'z'>('x');
@@ -120,6 +121,24 @@ function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { sele
   const target = useMemo(() => ({ source: 'selection' }) as const, []);
   const cloneDisabled = disabled || cloneCount <= 0 || cloneDistance <= 0;
   const clipCommitDisabled = disabled || !clipPreviewActive;
+
+  const updateMoveOffset = (axis: 'x' | 'y' | 'z', value: number) => {
+    setMoveOffsets((current) => ({ ...current, [axis]: value }));
+  };
+
+  const applyMove = () => {
+    if (disabled) return;
+    const offset: [number, number, number] = [moveOffsets.x, moveOffsets.y, moveOffsets.z];
+    if (offset.every((value) => value === 0)) return;
+    onExecute({
+      id: `ui-move-${Date.now()}`,
+      type: 'moveMesh',
+      target,
+      params: { offset, unit: scene.unit },
+      source: 'ui',
+      rawText: `手动移动 X=${offset[0]}, Y=${offset[1]}, Z=${offset[2]} ${scene.unit}`,
+    });
+  };
 
   const updateRotationAngle = (axis: 'x' | 'y' | 'z', value: number) => {
     setRotationAngles((current) => ({ ...current, [axis]: value }));
@@ -162,8 +181,23 @@ function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { sele
 
   return (
     <div className="panel-body stacked">
-      <section className="tool-section" aria-label="旋转">
-        <div className="section-title">旋转 <span>{selectedCount || 0} selected</span></div>
+      <CollapsibleToolSection title="移动">
+        {axisOptions.map((axis) => (
+          <NumberField
+            key={axis}
+            label={`${axis.toUpperCase()} 轴`}
+            value={moveOffsets[axis]}
+            onChange={(value) => updateMoveOffset(axis, value)}
+            suffix={scene.unit}
+            incrementLabel={`增加 ${axis.toUpperCase()} 轴位移`}
+            decrementLabel={`减少 ${axis.toUpperCase()} 轴位移`}
+          />
+        ))}
+        <div className="tool-action-row" role="group" aria-label="移动操作">
+          <button disabled={disabled || axisOptions.every((axis) => moveOffsets[axis] === 0)} className="primary-button" onClick={applyMove}>应用移动</button>
+        </div>
+      </CollapsibleToolSection>
+      <CollapsibleToolSection title="旋转">
         {axisOptions.map((axis) => (
           <NumberField
             key={axis}
@@ -177,9 +211,8 @@ function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { sele
         <div className="tool-action-row" role="group" aria-label="旋转操作">
           <button disabled={disabled || axisOptions.every((axis) => rotationAngles[axis] === 0)} className="primary-button" onClick={applyRotation}>应用旋转</button>
         </div>
-      </section>
-      <section className="tool-section" aria-label="复制">
-        <div className="section-title">复制</div>
+      </CollapsibleToolSection>
+      <CollapsibleToolSection title="复制">
         <NumberField label="数量" min={0} max={12} value={cloneCount} onChange={setCloneCount} incrementLabel="增加数量" decrementLabel="减少数量" />
         <div className="field-row">
           <span id="clone-axis-label">方向</span>
@@ -197,9 +230,8 @@ function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { sele
             复制对象
           </button>
         </div>
-      </section>
-      <section className="tool-section" aria-label="切割预览">
-        <div className="section-title">切割预览</div>
+      </CollapsibleToolSection>
+      <CollapsibleToolSection title="切割">
         <div className="field-row">
           <span id="clip-axis-label">平面</span>
           <div className="segmented-control" role="group" aria-labelledby="clip-axis-label">
@@ -234,12 +266,37 @@ function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { sele
             </>
           )}
         </div>
-      </section>
+      </CollapsibleToolSection>
     </div>
   );
 }
 
-function NumberField({ label, value, onChange, min, max, step = 1, incrementLabel, decrementLabel }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; incrementLabel: string; decrementLabel: string }) {
+function CollapsibleToolSection({ title, meta, children }: { title: string; meta?: string; children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const contentId = useId();
+
+  return (
+    <section className={`tool-section ${collapsed ? 'is-collapsed' : ''}`} aria-label={title}>
+      <button
+        type="button"
+        className="section-title section-toggle"
+        aria-label={`${collapsed ? '展开' : '折叠'}${title}`}
+        aria-expanded={!collapsed}
+        aria-controls={contentId}
+        onClick={() => setCollapsed((current) => !current)}
+      >
+        <span className="section-title-main">{title}</span>
+        <span className="section-title-side">{meta}</span>
+        {collapsed ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
+      </button>
+      <div id={contentId} className="tool-section-body-frame" aria-hidden={collapsed}>
+        <div className="tool-section-body">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+function NumberField({ label, value, onChange, min, max, step = 1, suffix, incrementLabel, decrementLabel }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; suffix?: string; incrementLabel: string; decrementLabel: string }) {
   const inputId = useId();
   const [inputValue, setInputValue] = useState(String(value));
   const commitValue = (nextValue: number) => {
@@ -269,8 +326,11 @@ function NumberField({ label, value, onChange, min, max, step = 1, incrementLabe
   return (
     <div className="field-row number-field">
       <label htmlFor={inputId}>{label}</label>
-      <div className="number-stepper-control">
-        <input id={inputId} type="number" min={min} max={max} step={step} value={inputValue} onChange={(event) => handleInputChange(event.target.value)} onBlur={handleInputBlur} />
+      <div className={`number-stepper-control ${suffix ? 'has-suffix' : ''}`}>
+        <div className="number-input-shell">
+          <input id={inputId} type="number" min={min} max={max} step={step} value={inputValue} onChange={(event) => handleInputChange(event.target.value)} onBlur={handleInputBlur} />
+          {suffix ? <span className="number-field-suffix" aria-hidden="true">{suffix}</span> : null}
+        </div>
         <div className="number-stepper-buttons">
           <button type="button" aria-label={incrementLabel} onClick={() => commitValue(value + step)}><ChevronUp size={12} aria-hidden="true" /></button>
           <button type="button" aria-label={decrementLabel} onClick={() => commitValue(value - step)}><ChevronDown size={12} aria-hidden="true" /></button>
@@ -304,6 +364,7 @@ function normalForAxis(axis: 'x' | 'y' | 'z'): [number, number, number] {
 function pendingTitle(command: OperationCommand): string {
   if (command.type === 'clipMesh') return '待确认切割';
   if (command.type === 'cloneMesh') return '待确认复制';
+  if (command.type === 'moveMesh') return '待确认移动';
   if (command.type === 'rotateMesh') return '待确认旋转';
   if (command.type === 'setMeshScale') return '待确认缩放';
   return '待确认操作';
@@ -312,6 +373,7 @@ function pendingTitle(command: OperationCommand): string {
 function pendingDescription(command: OperationCommand): string {
   if (command.type === 'clipMesh') return '预览已经显示在视窗中，确认后写入历史，取消会恢复当前场景。';
   if (command.type === 'cloneMesh') return `将复制 ${command.params.count} 个对象。`;
+  if (command.type === 'moveMesh') return `将移动 ${command.params.offset.join(', ')} ${command.params.unit}。`;
   if (command.type === 'rotateMesh') return `旋转预览已经显示在视窗中，将应用 ${command.params.angleDeg} 度。`;
   if (command.type === 'setMeshScale') return `缩放预览已经显示在视窗中，将应用 ${command.params.scale.join(', ')}。`;
   return command.type;
@@ -320,6 +382,6 @@ function pendingDescription(command: OperationCommand): string {
 function pendingConfirmLabel(command: OperationCommand): string {
   if (command.type === 'clipMesh') return '确认应用';
   if (command.type === 'cloneMesh') return '确认复制';
-  if (command.type === 'rotateMesh' || command.type === 'setMeshScale') return '确认应用';
+  if (command.type === 'moveMesh' || command.type === 'rotateMesh' || command.type === 'setMeshScale') return '确认应用';
   return '确认';
 }

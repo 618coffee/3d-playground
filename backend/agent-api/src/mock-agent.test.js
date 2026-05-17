@@ -69,3 +69,17 @@ test('targets an orange mesh by color label for rotation requests', () => {
   assert.equal(response.action.params.axis, 'y');
   assert.equal(response.action.params.angleDeg, 30);
 });
+
+test('creates moveMesh drafts for axis movement requests', () => {
+  const response = createMockAgentResponse({
+    id: 'mock-move-request',
+    text: '把当前对象沿 X 轴移动 10mm',
+    scene,
+    conversation: [],
+  });
+
+  assert.equal(response.kind, 'actionDraft');
+  assert.equal(response.action.type, 'moveMesh');
+  assert.deepEqual(response.action.target, { source: 'selection' });
+  assert.deepEqual(response.action.params, { offset: [10, 0, 0], unit: 'mm' });
+});

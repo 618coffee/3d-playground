@@ -58,6 +58,7 @@ export type VtkRuntime = {
   addMesh: (mesh: MeshEntity, dataset?: unknown) => void;
   clear: () => void;
   rotateMesh: (meshId: string, axis: 'x' | 'y' | 'z' | Vec3, angleDeg: number) => void;
+  moveMesh: (meshId: string, offset: Vec3) => void;
   setMeshScale: (meshId: string, scale: Vec3) => void;
   cloneMesh: (sourceId: string, clone: MeshEntity) => void;
   previewClip: (meshId: string, clip: VisualClip) => void;
@@ -161,6 +162,17 @@ export function createVtkRuntime(): VtkRuntime {
         if (axis === 'y') actor.rotateY(angleDeg);
         if (axis === 'z') actor.rotateZ(angleDeg);
       });
+      render();
+    },
+    moveMesh(meshId, offset) {
+      const record = records.get(meshId);
+      if (!record) return;
+      const nextPosition = addVec3Local(record.mesh.transform.position, offset);
+      record.actors.forEach((actor) => actor.setPosition(...nextPosition));
+      record.mesh = {
+        ...record.mesh,
+        transform: { ...record.mesh.transform, position: nextPosition },
+      };
       render();
     },
     setMeshScale(meshId, scale) {

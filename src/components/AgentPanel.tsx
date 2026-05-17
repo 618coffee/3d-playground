@@ -828,6 +828,7 @@ function commandTitle(command: OperationCommand) {
   const titles: Record<OperationCommand['type'], string> = {
     selectMesh: '选择对象',
     rotateMesh: '旋转对象',
+    moveMesh: '移动对象',
     cloneMesh: '复制对象',
     setMeshScale: '缩放对象',
     clipMesh: '视觉切割',
@@ -846,6 +847,7 @@ function buildActionSummary(command: OperationCommand, sceneMeshes: MeshEntity[]
   ];
 
   if (command.type === 'rotateMesh') rows.push(['参数', `${axisLabel(command.params.axis)} 轴 ${command.params.angleDeg}°`]);
+  if (command.type === 'moveMesh') rows.push(['参数', `${command.params.offset.join(', ')} ${command.params.unit}`]);
   if (command.type === 'cloneMesh') rows.push(['参数', `${command.params.count} 个，偏移 ${command.params.offset.join(', ')} ${command.params.unit}`]);
   if (command.type === 'clipMesh') rows.push(['参数', clipParameterLabel(command)]);
   if (command.type === 'resetView') rows.push(['参数', `${command.params.orientation} / ${command.params.fit}`]);

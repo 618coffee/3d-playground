@@ -24,6 +24,7 @@ test('system prompt includes Ask Edit and Agent mode guidance', () => {
   assert.match(prompt, /Ask mode/);
   assert.match(prompt, /Edit mode/);
   assert.match(prompt, /Agent mode/);
+  assert.match(prompt, /moveMesh/);
   assert.match(prompt, /Ask mode.*sceneAnswer/s);
   assert.match(prompt, /Edit mode.*actionDraft/s);
   assert.match(prompt, /Agent mode.*actionPlan/s);

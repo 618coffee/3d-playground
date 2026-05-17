@@ -16,6 +16,7 @@ export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
 const commandTypes = [
   'selectMesh',
   'rotateMesh',
+  'moveMesh',
   'cloneMesh',
   'setMeshScale',
   'clipMesh',
@@ -69,6 +70,12 @@ export function validateOperationCommand(value: unknown): ValidationResult<Opera
     if (!Number.isFinite(value.params.angleDeg)) return fail('Rotation angle is invalid.');
     if (!isPivot(value.params.pivot)) return fail('Rotation pivot is invalid.');
     if (value.params.space !== 'world' && value.params.space !== 'local') return fail('Rotation space is invalid.');
+    return ok(value as OperationCommand);
+  }
+
+  if (value.type === 'moveMesh') {
+    if (!isVec3(value.params.offset)) return fail('Move offset is invalid.');
+    if (!isOneOf(value.params.unit, ['mm', 'cm', 'm', 'model'] as const)) return fail('Move unit is invalid.');
     return ok(value as OperationCommand);
   }
 
