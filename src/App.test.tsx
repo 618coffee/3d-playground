@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import type { AgentResponse } from './domain/protocol';
+
+const appStyles = readFileSync(`${process.cwd()}/src/styles.css`, 'utf8');
 
 class ResizeObserverStub {
   observe() {}
@@ -129,5 +132,37 @@ describe('App agent draft previews', () => {
 
     expect(screen.queryByRole('region', { name: '选中对象属性' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '展开属性面板' })).toBeInTheDocument();
+  });
+
+  it('keeps hidden panel slots mounted so layout collapse can animate', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+    const shell = document.querySelector('.app-shell') as HTMLElement;
+
+    fireEvent.click(screen.getByRole('button', { name: '隐藏对象树' }));
+    fireEvent.click(screen.getByRole('button', { name: '隐藏检查器' }));
+    fireEvent.click(screen.getByRole('button', { name: '隐藏时间线' }));
+
+    expect(document.querySelector('.left-panel-slot')).toHaveClass('is-hidden');
+    expect(document.querySelector('.right-panel-slot')).toHaveClass('is-hidden');
+    expect(document.querySelector('.bottom-panel-slot')).toHaveClass('is-hidden');
+    expect(shell.style.getPropertyValue('--workbench-columns')).toBe('0px minmax(520px, 1fr) 0px');
+    expect(shell.style.getPropertyValue('--bottom-panel-height')).toBe('0px');
+  });
+
+  it('keeps the mounted bottom panel in a zero-height grid track when collapsed', () => {
+    expect(appStyles).toMatch(/\.center-panel-slot\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) var\(--bottom-panel-height, 172px\);/s);
+    expect(appStyles).not.toMatch(/\.center-panel-slot\.bottom-panel-hidden\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);/s);
+  });
+
+  it('aligns viewport status chips with the zoom control bottom edge', () => {
+    const zoomBottom = appStyles.match(/\.view-scale-control\s*\{[^}]*bottom:\s*(\d+px);/s)?.[1];
+    const statusBottom = appStyles.match(/\.viewport-status\s*\{[^}]*bottom:\s*(\d+px);/s)?.[1];
+
+    expect(zoomBottom).toBe('12px');
+    expect(statusBottom).toBe(zoomBottom);
   });
 });

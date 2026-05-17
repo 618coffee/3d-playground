@@ -334,8 +334,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
         </div>
       </div>
 
-      {historyOpen ? (
-        <section className="agent-session-picker" aria-label="历史会话列表">
+      <section className={`agent-session-picker ${historyOpen ? 'is-open' : 'is-collapsed'}`} aria-label="历史会话列表" {...hiddenDrawerProps(!historyOpen)}>
           {sessionState.sessions.map((session) => (
             <div key={session.id} className="agent-session-row">
               <button type="button" className={session.id === activeSession.id ? 'active' : ''} onClick={() => openSession(session.id)}>
@@ -347,7 +346,6 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
             </div>
           ))}
         </section>
-      ) : null}
 
       {activeSession.messages.length === 0 ? (
         <section className="agent-starter-prompts agent-chip-row chip-row" aria-label="Starter prompts">
@@ -620,7 +618,7 @@ function AgentResponseView({
             </button>
           </div>
         )}
-        {!readOnly && debugOpen ? <DebugDrawer payload={response} /> : null}
+        <DebugDrawer payload={response} open={!readOnly && debugOpen} />
       </section>
     );
   }
@@ -661,7 +659,7 @@ function AgentResponseView({
             </button>
           </div>
         )}
-        {!readOnly && debugOpen ? <DebugDrawer payload={response} /> : null}
+        <DebugDrawer payload={response} open={!readOnly && debugOpen} />
       </section>
     );
   }
@@ -740,7 +738,7 @@ function AgentResponseView({
           </button>
         </div>
       )}
-      {!readOnly && debugOpen ? <DebugDrawer payload={response} /> : null}
+      <DebugDrawer payload={response} open={!readOnly && debugOpen} />
     </section>
   );
 }
@@ -755,12 +753,18 @@ function RiskNote({ risk }: { risk: ActionRisk }) {
   );
 }
 
-function DebugDrawer({ payload }: { payload: unknown }) {
+function DebugDrawer({ payload, open }: { payload: unknown; open: boolean }) {
   return (
-    <div className="agent-debug-drawer">
-      <pre>{JSON.stringify(payload, null, 2)}</pre>
+    <div className={`agent-debug-drawer ${open ? 'is-open' : 'is-collapsed'}`} aria-hidden={!open}>
+      <div className="agent-debug-drawer-inner">
+        <pre>{JSON.stringify(payload, null, 2)}</pre>
+      </div>
     </div>
   );
+}
+
+function hiddenDrawerProps(hidden: boolean) {
+  return hidden ? { 'aria-hidden': true, inert: '' } : {};
 }
 
 function createAgentAdapter(fallback: AgentAdapter): AgentAdapter {

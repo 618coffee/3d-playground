@@ -110,6 +110,27 @@ describe('AgentPanel', () => {
     expect(document.querySelector('.agent-status-footer')).not.toBeInTheDocument();
   });
 
+  it('keeps the history drawer mounted with collapsed and expanded states', () => {
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const drawer = document.querySelector('.agent-session-picker') as HTMLElement;
+    expect(drawer).toHaveClass('is-collapsed');
+    expect(drawer).toHaveAttribute('aria-hidden', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: '历史会话' }));
+
+    expect(drawer).toHaveClass('is-open');
+    expect(drawer).not.toHaveAttribute('aria-hidden');
+  });
+
   it('places the mode selector, model selector, and send button on one row below the input', () => {
     render(
       <AgentPanel

@@ -301,8 +301,10 @@ export default function App() {
         onResetView={resetView}
       />
       <div className={`workbench-grid ${panelVisibility.left ? '' : 'left-panel-hidden'} ${panelVisibility.right ? '' : 'right-panel-hidden'}`}>
-        {panelVisibility.left ? (
-          <div className={`panel-slot left-panel-slot left-panel-stack ${leftPropertiesOpen ? 'properties-open' : 'properties-collapsed'}`}>
+        <div
+          className={`panel-slot left-panel-slot left-panel-stack ${leftPropertiesOpen ? 'properties-open' : 'properties-collapsed'} ${panelVisibility.left ? '' : 'is-hidden'}`}
+          {...hiddenPanelProps(!panelVisibility.left)}
+        >
             <div className="left-object-tree-pane">
               <ObjectTree
                 meshes={scene.meshes}
@@ -321,15 +323,12 @@ export default function App() {
                   {leftPropertiesOpen ? '折叠' : '展开'}
                 </button>
               </div>
-              {leftPropertiesOpen ? (
-                <div className="left-properties-content" role="region" aria-label="选中对象属性">
-                  <PropertiesPanel mesh={selectedMesh} selectedMeshes={selectedMeshes} />
-                </div>
-              ) : null}
+              <div className={`left-properties-content ${leftPropertiesOpen ? 'is-open' : 'is-collapsed'}`} role="region" aria-label="选中对象属性" aria-hidden={!leftPropertiesOpen}>
+                <PropertiesPanel mesh={selectedMesh} selectedMeshes={selectedMeshes} />
+              </div>
             </section>
             <div className="panel-resize-handle resize-handle-right" role="separator" aria-orientation="vertical" title="调整对象树宽度" onMouseDown={(event) => startPanelResize('left', event)} />
           </div>
-        ) : null}
         <div className={`center-panel-slot ${panelVisibility.bottom ? '' : 'bottom-panel-hidden'}`}>
           <div className="viewer-slot">
             <ViewerPanel
@@ -356,15 +355,12 @@ export default function App() {
             />
             <PanelRestoreControls visibility={panelVisibility} onTogglePanel={togglePanel} />
           </div>
-          {panelVisibility.bottom ? (
-            <div className="bottom-panel-slot">
+          <div className={`bottom-panel-slot ${panelVisibility.bottom ? '' : 'is-hidden'}`} {...hiddenPanelProps(!panelVisibility.bottom)}>
               <div className="panel-resize-handle resize-handle-top" role="separator" aria-orientation="horizontal" title="调整时间线高度" onMouseDown={(event) => startPanelResize('bottom', event)} />
               <HistoryTimeline entries={historyEntries} lastMessage={lastMessage} onHidePanel={() => togglePanel('bottom')} />
             </div>
-          ) : null}
         </div>
-        {panelVisibility.right ? (
-          <div className="panel-slot right-panel-slot">
+        <div className={`panel-slot right-panel-slot ${panelVisibility.right ? '' : 'is-hidden'}`} {...hiddenPanelProps(!panelVisibility.right)}>
             <div className="panel-resize-handle resize-handle-left" role="separator" aria-orientation="vertical" title="调整检查器宽度" onMouseDown={(event) => startPanelResize('right', event)} />
             <InspectorPanel
               scene={scene}
@@ -379,7 +375,6 @@ export default function App() {
               onHidePanel={() => togglePanel('right')}
             />
           </div>
-        ) : null}
       </div>
     </div>
   );
@@ -397,16 +392,18 @@ function PanelRestoreControls({ visibility, onTogglePanel }: { visibility: Panel
 }
 
 function layoutStyle(sizes: PanelSizes, visibility: PanelVisibility, leftPropertiesHeight: number | null): CSSProperties {
-  const columns = [visibility.left ? `${sizes.left}px` : null, 'minmax(520px, 1fr)', visibility.right ? `${sizes.right}px` : null]
-    .filter(Boolean)
-    .join(' ');
+  const columns = [visibility.left ? `${sizes.left}px` : '0px', 'minmax(520px, 1fr)', visibility.right ? `${sizes.right}px` : '0px'].join(' ');
   return {
     '--left-panel-width': `${sizes.left}px`,
     '--right-panel-width': `${sizes.right}px`,
-    '--bottom-panel-height': `${sizes.bottom}px`,
+    '--bottom-panel-height': visibility.bottom ? `${sizes.bottom}px` : '0px',
     '--left-properties-height': leftPropertiesHeight === null ? '50%' : `${leftPropertiesHeight}px`,
     '--workbench-columns': columns,
   } as CSSProperties;
+}
+
+function hiddenPanelProps(hidden: boolean) {
+  return hidden ? { 'aria-hidden': true, inert: '' } : {};
 }
 
 function defaultLeftPropertiesHeight(shell: HTMLDivElement | null): number {
