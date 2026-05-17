@@ -50,6 +50,33 @@ const cloneDraft: AgentResponse = {
   },
 };
 
+const clipDraft: AgentResponse = {
+  kind: 'actionDraft',
+  action: {
+    id: 'clip-1',
+    type: 'clipMesh',
+    target: { source: 'selection' },
+    params: {
+      plane: { origin: [0, 0, 0], normal: [0, 0, 1] },
+      keepSide: 'positive',
+      mode: 'applyVisualClip',
+      cap: true,
+    },
+    source: 'agent',
+    rawText: '沿 z=0 平面切开当前对象，只保留正侧',
+    confirmed: false,
+  },
+  explanation: 'Converted a plane cut request into a viewer visual clipping draft.',
+  confidence: 0.78,
+  risk: {
+    level: 'medium',
+    summary: 'Creates or applies a visual clipping state for review.',
+    warnings: ['视觉切割需要用户检查预览后确认。'],
+    requiresConfirmation: true,
+    reversible: true,
+  },
+};
+
 const actionPlan: AgentResponse = {
   kind: 'actionPlan',
   steps: [
@@ -807,7 +834,48 @@ describe('AgentPanel', () => {
     expect(within(summaryGrid).queryByText('操作')).not.toBeInTheDocument();
     expect(within(summaryGrid).queryByText('cloneMesh')).not.toBeInTheDocument();
     expect(within(summaryGrid).queryByText('当前选择')).not.toBeInTheDocument();
+    expect(within(summaryGrid).queryByText('来源')).not.toBeInTheDocument();
+    expect(within(summaryGrid).queryByText('agent')).not.toBeInTheDocument();
     expect(within(summaryGrid).getByText('Blue titanium fan stage')).toBeInTheDocument();
+  });
+
+  it('renders clip drafts with preview-oriented labels and localized copy', async () => {
+    const selectedMesh = createMesh('shaft-1', 'Compressor core shaft', true);
+    const scene = createInitialScene([selectedMesh]);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(clipDraft), { status: 200 })));
+
+    render(
+      <AgentPanel
+        scene={scene}
+        selectedMeshes={[selectedMesh]}
+        historyEntries={[]}
+        pendingCommand={clipDraft.action}
+        onExecute={vi.fn()}
+        onConfirmPending={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '沿 z=0 平面切开当前对象' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+
+    expect(await screen.findByText('切割预览：Z=0，保留正侧')).toBeInTheDocument();
+    expect(screen.getByText('已生成切割预览，请检查后再应用。')).toBeInTheDocument();
+
+    const summaryGrid = document.querySelector('.agent-review-grid') as HTMLElement;
+    expect(within(summaryGrid).getByText('Compressor core shaft')).toBeInTheDocument();
+    expect(within(summaryGrid).getByText('Z=0，保留正侧')).toBeInTheDocument();
+    expect(within(summaryGrid).queryByText('来源')).not.toBeInTheDocument();
+    expect(within(summaryGrid).queryByText('agent')).not.toBeInTheDocument();
+    expect(within(summaryGrid).queryByText(/applyVisualClip/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Converted a plane cut/, { selector: 'p' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Creates or applies/, { selector: 'strong' })).not.toBeInTheDocument();
+    expect(screen.queryByText('78%')).not.toBeInTheDocument();
+    expect(screen.getByText('视觉切割预览已生成')).toBeInTheDocument();
+    expect(screen.getByText('确认后应用到视图状态。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /清除预览/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /查看 JSON/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /应用切割/ })).toBeInTheDocument();
+    expect(document.querySelector('.agent-review-actions.is-clip')).toBeInTheDocument();
   });
 
   it('makes the previous executable response read-only when a newer request starts', async () => {

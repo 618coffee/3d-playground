@@ -1723,6 +1723,15 @@ label input[type='file'] {
   background: #211d14;
 }
 
+.agent-clip-note {
+  border-color: #2d5268;
+  background: #101c24;
+}
+
+.agent-clip-note strong {
+  color: #cfe9f7;
+}
+
 .agent-plan-review {
   display: grid;
   gap: 8px;
@@ -1772,6 +1781,15 @@ label input[type='file'] {
 .agent-review-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.agent-review-actions.is-clip {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.agent-review-actions.is-clip button {
+  white-space: nowrap;
 }
 
 .agent-debug-drawer {

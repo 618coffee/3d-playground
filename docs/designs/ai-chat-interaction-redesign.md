@@ -1,16 +1,18 @@
 # AI Chat Interaction Redesign
 
-# Solution
+## Solution
 
 ## Summary
 
 Implemented the AI panel as a VS Code-like chat composer. The prompt remains at the top of the AI tab, selected objects render as context pills in the input surface, old retry/stop/parse-review buttons are removed, and a single icon button now sends, stops, or stops-and-resends depending on request state and edited prompt text. Review follow-up also keeps cancel enabled when the prompt is cleared during loading and prevents cancelled late responses from updating the UI. A later layout pass makes the textarea span the composer width, moves `LLM API` below the input, and aligns it with a Copilot-style blue up-arrow send button.
 
+Latest refinement: empty chats now leave the conversation area blank, the model selector displays `GPT-5.3`, the compact selector row uses equal-width arrowless controls, and agent visual clipping drafts use localized preview language (`切割预览`, `清除预览`, `应用切割`) with readable plane/keep-side parameters instead of internal command names.
+
 ## Changed Files
 
-- `src/components/AgentPanel.tsx`: added selection pills, compact chat composer, editable loading state, request sequence guarding, and abort-before-resend behavior.
+- `src/components/AgentPanel.tsx`: added selection pills, compact chat composer, editable loading state, request sequence guarding, abort-before-resend behavior, and localized visual clip draft labels.
 - `src/components/InspectorPanel.tsx`: passes selected meshes into the AI panel.
-- `src/components/AgentPanel.test.tsx`: covers the new composer controls, selection pills, editable loading state, and abort/resend flow.
+- `src/components/AgentPanel.test.tsx`: covers the new composer controls, selection pills, editable loading state, abort/resend flow, empty chat state, and visual clip draft copy.
 - `src/components/InspectorPanel.test.tsx`: covers chat visibility with no selected object.
 - `src/styles.css`: styles the composer, pills, textarea, and single send/stop icon button.
 - `scripts/smoke-browser.mjs`: updates browser smoke coverage for the new send button and current Vite dev task URL.

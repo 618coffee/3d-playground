@@ -688,9 +688,8 @@ function AgentResponseView({
           <span className="review-kicker">操作草稿</span>
           <strong>{commandTitle(response.action)}</strong>
         </div>
-        <span className="confidence-pill">{Math.round(response.confidence * 100)}%</span>
       </div>
-      <p>{response.explanation}</p>
+      <p>{actionDraftDescription(response.action, response.explanation)}</p>
       <div className="agent-review-grid">
         {summaryRows.map(([label, value]) => (
           <div className="agent-review-row" key={label}>
@@ -699,17 +698,19 @@ function AgentResponseView({
           </div>
         ))}
       </div>
-      <RiskNote risk={response.risk} />
+      <RiskNote risk={response.risk} command={response.action} />
       {readOnly ? <span className="agent-historical-note">历史草稿仅供查看</span> : (
-        <div className="agent-review-actions">
+        <div className={`agent-review-actions ${response.action.type === 'clipMesh' ? 'is-clip' : ''}`}>
           <button onClick={onDiscardDraft}>
-            <X size={15} /> 丢弃草稿
+            <X size={15} /> {discardActionLabel(response.action)}
           </button>
-          <button onClick={onToggleDebug} aria-expanded={debugOpen}>
-            {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} JSON
-          </button>
+          {response.action.type !== 'clipMesh' ? (
+            <button onClick={onToggleDebug} aria-expanded={debugOpen}>
+              {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} {debugActionLabel(response.action)}
+            </button>
+          ) : null}
           <button className="primary-button" onClick={() => (pendingMatchesDraft ? onConfirmPending?.() : onExecuteDraft(response.action))} disabled={pendingMatchesDraft && !onConfirmPending}>
-            {pendingMatchesDraft ? <Check size={15} /> : <Sparkles size={15} />} {pendingMatchesDraft ? '确认应用' : '确认执行'}
+            {pendingMatchesDraft ? <Check size={15} /> : <Sparkles size={15} />} {primaryActionLabel(response.action, pendingMatchesDraft)}
           </button>
         </div>
       )}
@@ -718,7 +719,16 @@ function AgentResponseView({
   );
 }
 
-function RiskNote({ risk }: { risk: ActionRisk }) {
+function RiskNote({ risk, command }: { risk: ActionRisk; command?: OperationCommand }) {
+  if (command?.type === 'clipMesh') {
+    return (
+      <div className={`risk-note agent-risk-note agent-clip-note risk-${risk.level}`}>
+        <strong>视觉切割预览已生成</strong>
+        <span>确认后应用到视图状态。</span>
+      </div>
+    );
+  }
+
   return (
     <div className={`risk-note agent-risk-note risk-${risk.level}`}>
       <strong>{risk.summary}</strong>
@@ -790,6 +800,11 @@ function conversationSummary(response: AgentResponse) {
   return `${commandTitle(response.action)} 已生成，确认前请检查参数。`;
 }
 
+function actionDraftDescription(command: OperationCommand, fallback: string) {
+  if (command.type === 'clipMesh') return '已生成切割预览，请检查后再应用。';
+  return fallback;
+}
+
 function responseAllowedInMode(mode: AgentMode, response: AgentResponse): true | string {
   if (mode === 'ask' && (response.kind === 'actionDraft' || response.kind === 'actionPlan' || response.kind === 'macroDraft' || response.kind === 'backendJobDraft')) {
     return 'Ask 模式只回答场景和能力问题；请切换到 Edit 或 Agent 模式来生成操作草稿。';
@@ -808,6 +823,8 @@ function statusGlyph(status: PlanStepStatus | undefined, fallback: number): stri
 }
 
 function commandTitle(command: OperationCommand) {
+  if (command.type === 'clipMesh') return `切割预览：${clipParameterLabel(command)}`;
+
   const titles: Record<OperationCommand['type'], string> = {
     selectMesh: '选择对象',
     rotateMesh: '旋转对象',
@@ -830,15 +847,49 @@ function buildActionSummary(command: OperationCommand, sceneMeshes: MeshEntity[]
 
   if (command.type === 'rotateMesh') rows.push(['参数', `${axisLabel(command.params.axis)} 轴 ${command.params.angleDeg}°`]);
   if (command.type === 'cloneMesh') rows.push(['参数', `${command.params.count} 个，偏移 ${command.params.offset.join(', ')} ${command.params.unit}`]);
-  if (command.type === 'clipMesh') rows.push(['参数', `${command.params.mode}，保留 ${command.params.keepSide}`]);
+  if (command.type === 'clipMesh') rows.push(['参数', clipParameterLabel(command)]);
   if (command.type === 'resetView') rows.push(['参数', `${command.params.orientation} / ${command.params.fit}`]);
   if (command.type === 'setDisplayMode') rows.push(['参数', command.params.mode]);
   if (command.type === 'setMeshVisibility') rows.push(['参数', command.params.visible ? '显示' : '隐藏']);
   if (command.type === 'setMeshLocked') rows.push(['参数', command.params.locked ? '锁定' : '解锁']);
   if (command.type === 'setMeshScale') rows.push(['参数', command.params.scale.join(', ')]);
 
-  rows.push(['来源', command.source]);
   return rows;
+}
+
+type ClipCommand = Extract<OperationCommand, { type: 'clipMesh' }>;
+
+function clipParameterLabel(command: ClipCommand) {
+  const axisIndex = dominantAxisIndex(command.params.plane.normal);
+  const keepSide = command.params.keepSide === 'positive' ? '正侧' : '负侧';
+  if (axisIndex === -1) {
+    return `平面原点 ${command.params.plane.origin.map(formatScalar).join(', ')}，保留${keepSide}`;
+  }
+
+  const axis = ['X', 'Y', 'Z'][axisIndex];
+  return `${axis}=${formatScalar(command.params.plane.origin[axisIndex])}，保留${keepSide}`;
+}
+
+function dominantAxisIndex(vector: [number, number, number]) {
+  const index = vector.findIndex((component) => Math.abs(component) >= 0.999);
+  return index === undefined ? -1 : index;
+}
+
+function formatScalar(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function discardActionLabel(command: OperationCommand) {
+  return command.type === 'clipMesh' ? '清除预览' : '丢弃草稿';
+}
+
+function debugActionLabel(command: OperationCommand) {
+  return command.type === 'clipMesh' ? '查看 JSON' : 'JSON';
+}
+
+function primaryActionLabel(command: OperationCommand, pendingMatchesDraft: boolean) {
+  if (command.type === 'clipMesh') return pendingMatchesDraft ? '应用切割' : '预览切割';
+  return pendingMatchesDraft ? '确认应用' : '确认执行';
 }
 
 function describeTarget(target: OperationCommand['target'], sceneMeshes: MeshEntity[], selectedMeshes: MeshEntity[]) {
