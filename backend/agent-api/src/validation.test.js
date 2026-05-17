@@ -33,6 +33,53 @@ const clipRequest = validateAgentRequest({
   conversation: [],
 });
 
+test('defaults request mode and model router metadata', () => {
+  const parsed = validateAgentRequest({
+    id: 'metadata-defaults',
+    text: '重置视角',
+    scene: request.scene,
+    conversation: [],
+  });
+
+  assert.equal(parsed.sessionId, undefined);
+  assert.equal(parsed.mode, 'edit');
+  assert.equal(parsed.modelRouterId, 'default-router');
+});
+
+test('preserves valid request session mode and model router metadata', () => {
+  const parsed = validateAgentRequest({
+    id: 'metadata-explicit',
+    sessionId: 'session-abc123',
+    text: '解释当前场景',
+    mode: 'ask',
+    modelRouterId: 'default-router',
+    scene: request.scene,
+    conversation: [],
+  });
+
+  assert.equal(parsed.sessionId, 'session-abc123');
+  assert.equal(parsed.mode, 'ask');
+  assert.equal(parsed.modelRouterId, 'default-router');
+});
+
+test('rejects invalid request mode and model router metadata', () => {
+  assert.throws(() => validateAgentRequest({
+    id: 'bad-mode',
+    text: '解释当前场景',
+    mode: 'review',
+    scene: request.scene,
+    conversation: [],
+  }), /mode/);
+
+  assert.throws(() => validateAgentRequest({
+    id: 'bad-router',
+    text: '解释当前场景',
+    modelRouterId: 'other-router',
+    scene: request.scene,
+    conversation: [],
+  }), /modelRouterId/);
+});
+
 test('normalizes schema-wrapper actions returned by an LLM', () => {
   const response = validateAgentResponse({
     kind: 'actionDraft',

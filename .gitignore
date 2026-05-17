@@ -7,3 +7,4 @@ vite.config.d.ts
 build_output.txt
 .DS_Store
 .tmp/
+.superpowers/

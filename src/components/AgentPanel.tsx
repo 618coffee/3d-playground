@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Check, ChevronDown, ChevronRight, Play, Sparkles, Square, X } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, ChevronRight, History, Play, Plus, Sparkles, Square, X } from 'lucide-react';
 import { buildAgentContext } from '../agent/context';
 import { createLlmAgentClient, createRuleParserAdapter } from '../agent/adapters';
+import {
+  appendAgentChatMessage,
+  createAgentChatSession,
+  loadAgentChatSessions,
+  saveAgentChatSessions,
+  summarizeSessionContext,
+  upsertAgentChatSession,
+} from '../agent/chatSessions';
 import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import type { HistoryEntry } from '../domain/history';
-import type { ActionRisk, AgentAdapter, AgentConversationTurn, AgentPlanStep, AgentResponse } from '../domain/protocol';
+import type { ActionRisk, AgentAdapter, AgentChatMessage, AgentChatSession, AgentConversationTurn, AgentMode, AgentPlanStep, AgentResponse, ModelRouterId } from '../domain/protocol';
 import type { SceneState } from '../domain/scene';
 import { validateAgentResponse } from '../domain/validators';
 
@@ -21,6 +29,7 @@ type AgentPanelProps = {
 
 type AgentStatus = 'idle' | 'loading' | 'ready' | 'error' | 'cancelled';
 type PlanStepStatus = 'pending' | 'applied' | 'blocked' | 'failed';
+type AgentSessionState = { sessions: AgentChatSession[]; activeSessionId: string };
 
 const examples = [
   '把当前对象绕 Z 轴旋转 30 度',
@@ -32,34 +41,128 @@ const examples = [
 export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pendingCommand, onExecute, onConfirmPending, onCancelPending, onPreviewDraft }: AgentPanelProps) {
   const fallbackAdapter = useMemo(() => createRuleParserAdapter(), []);
   const adapter = useMemo(() => createAgentAdapter(fallbackAdapter), [fallbackAdapter]);
+  const [sessionState, setSessionState] = useState<AgentSessionState>(() => createInitialSessionState(scene, historyEntries));
   const [text, setText] = useState(examples[0]);
-  const [response, setResponse] = useState<AgentResponse | null>(null);
-  const [conversation, setConversation] = useState<AgentConversationTurn[]>([]);
+  const [activeResponseMessageId, setActiveResponseMessageId] = useState<string | null>(null);
   const [status, setStatus] = useState<AgentStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [planStatuses, setPlanStatuses] = useState<Record<string, PlanStepStatus>>({});
+  const sessionStateRef = useRef(sessionState);
   const abortRef = useRef<AbortController | null>(null);
   const requestSerialRef = useRef(0);
   const inFlightPromptRef = useRef('');
   const lastPendingActionIdRef = useRef<string | null>(null);
+  const cancelledPendingActionIdRef = useRef<string | null>(null);
+  const activeSession = getActiveSession(sessionState);
+  const effectivePendingCommand = pendingCommand?.id === cancelledPendingActionIdRef.current ? null : pendingCommand;
+  const activeResponse = useMemo(() => activeSession.messages.find((message) => message.id === activeResponseMessageId)?.response ?? null, [activeResponseMessageId, activeSession.messages]);
+
+  const replaceSessionState = (nextState: AgentSessionState) => {
+    sessionStateRef.current = nextState;
+    setSessionState(nextState);
+    saveAgentChatSessions(nextState.sessions);
+  };
+
+  const persistSession = (session: AgentChatSession, makeActive = true) => {
+    const currentState = sessionStateRef.current;
+    const nextState = {
+      sessions: upsertAgentChatSession(currentState.sessions, session),
+      activeSessionId: makeActive ? session.id : currentState.activeSessionId,
+    };
+    replaceSessionState(nextState);
+    return session;
+  };
+
+  const appendMessageToSession = (sessionId: string, message: Omit<AgentChatMessage, 'id' | 'createdAt'> & Partial<Pick<AgentChatMessage, 'id' | 'createdAt'>>) => {
+    const currentState = sessionStateRef.current;
+    const targetSession = currentState.sessions.find((session) => session.id === sessionId);
+    if (!targetSession) return null;
+    const nextSession = appendAgentChatMessage(targetSession, message);
+    const nextState = {
+      sessions: upsertAgentChatSession(currentState.sessions, nextSession),
+      activeSessionId: currentState.activeSessionId,
+    };
+    replaceSessionState(nextState);
+    return nextSession;
+  };
+
+  const appendActiveStatus = (message: string) => {
+    appendMessageToSession(sessionStateRef.current.activeSessionId, { role: 'status', text: message });
+  };
+
+  const updateActiveSession = (updates: Partial<Pick<AgentChatSession, 'mode' | 'modelRouterId'>>) => {
+    const currentSession = getActiveSession(sessionStateRef.current);
+    persistSession({ ...currentSession, ...updates, updatedAt: new Date().toISOString() });
+  };
+
+  const invalidateInFlightRequest = () => {
+    requestSerialRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    inFlightPromptRef.current = '';
+  };
+
+  const cancelPendingPreview = () => {
+    if (pendingCommand?.source !== 'agent') return;
+    cancelledPendingActionIdRef.current = pendingCommand.id;
+    lastPendingActionIdRef.current = null;
+    onCancelPending?.();
+  };
+
+  const createNewSession = () => {
+    invalidateInFlightRequest();
+    cancelPendingPreview();
+    const nextSession = createAgentChatSession(summarizeSessionContext(scene, historyEntries));
+    persistSession(nextSession);
+    setActiveResponseMessageId(null);
+    setError(null);
+    setDebugOpen(false);
+    setPlanStatuses({});
+    setHistoryOpen(false);
+    setStatus('idle');
+  };
+
+  const openSession = (sessionId: string) => {
+    const nextSession = sessionStateRef.current.sessions.find((session) => session.id === sessionId);
+    if (!nextSession) return;
+    if (nextSession.id === sessionStateRef.current.activeSessionId) {
+      setHistoryOpen(false);
+      return;
+    }
+    invalidateInFlightRequest();
+    cancelPendingPreview();
+    replaceSessionState({ sessions: sessionStateRef.current.sessions, activeSessionId: nextSession.id });
+    setActiveResponseMessageId(null);
+    setError(null);
+    setDebugOpen(false);
+    setPlanStatuses({});
+    setHistoryOpen(false);
+    setStatus('idle');
+  };
 
   useEffect(() => {
-    if (pendingCommand?.source === 'agent') {
-      lastPendingActionIdRef.current = pendingCommand.id;
+    if (!pendingCommand || pendingCommand.id !== cancelledPendingActionIdRef.current) {
+      cancelledPendingActionIdRef.current = null;
+    }
+
+    if (effectivePendingCommand?.source === 'agent') {
+      lastPendingActionIdRef.current = effectivePendingCommand.id;
       return;
     }
 
-    if (response?.kind === 'actionDraft' && lastPendingActionIdRef.current === response.action.id) {
-      setResponse(null);
+    if (activeResponse?.kind === 'actionDraft' && lastPendingActionIdRef.current === activeResponse.action.id) {
+      setActiveResponseMessageId(null);
       setDebugOpen(false);
       setPlanStatuses({});
       lastPendingActionIdRef.current = null;
     }
-  }, [pendingCommand, response]);
+  }, [pendingCommand, effectivePendingCommand, activeResponse]);
 
   const sendRequest = async (input = text) => {
     const prompt = input.trim();
+    const currentSession = getActiveSession(sessionStateRef.current);
 
     if (status === 'loading') {
       const shouldResend = Boolean(prompt) && prompt !== inFlightPromptRef.current;
@@ -70,23 +173,32 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
         inFlightPromptRef.current = '';
         setStatus('cancelled');
         setError(null);
-        setConversation((current) => [...current, createTurn('tool', '请求已取消。')]);
+        appendMessageToSession(currentSession.id, { role: 'status', text: '请求已取消。' });
         return;
       }
     }
 
     if (!prompt) return;
 
+    const shouldCancelPendingForNewRequest = Boolean(activeResponseMessageId) && effectivePendingCommand?.source === 'agent';
+    const pendingCommandForRequest = shouldCancelPendingForNewRequest ? null : effectivePendingCommand;
+    if (shouldCancelPendingForNewRequest) cancelPendingPreview();
+
     const requestSerial = requestSerialRef.current + 1;
     requestSerialRef.current = requestSerial;
     const controller = new AbortController();
     abortRef.current = controller;
     inFlightPromptRef.current = prompt;
-    const userTurn = createTurn('user', prompt);
-    const nextConversation = [...conversation, userTurn];
+    const requestSession = appendAgentChatMessage(currentSession, {
+      role: 'user',
+      text: prompt,
+      request: { text: prompt, mode: currentSession.mode, modelRouterId: currentSession.modelRouterId },
+    });
+    const nextConversation = sessionMessagesToConversation(requestSession.messages);
 
     setText(input);
-    setConversation(nextConversation);
+    persistSession(requestSession);
+    setActiveResponseMessageId(null);
     setStatus('loading');
     setError(null);
     setDebugOpen(false);
@@ -95,28 +207,41 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     try {
       const next = await adapter.respond({
         id: createId('agent-request'),
+        sessionId: requestSession.id,
         text: prompt,
+        mode: requestSession.mode,
+        modelRouterId: requestSession.modelRouterId,
         scene,
         conversation: nextConversation.slice(-8),
-        pendingCommand,
+        pendingCommand: pendingCommandForRequest,
         context: buildAgentContext(scene, historyEntries),
       }, { signal: controller.signal });
       const validated = validateAgentResponse(next);
       if (!validated.ok) throw new Error(validated.error);
       if (requestSerialRef.current !== requestSerial || controller.signal.aborted) return;
 
-      setResponse(validated.value);
+      const modeCheck = responseAllowedInMode(requestSession.mode, validated.value);
+      if (modeCheck !== true) {
+        appendMessageToSession(requestSession.id, { role: 'status', text: modeCheck });
+        setStatus('ready');
+        return;
+      }
+
+      const assistantMessageId = createId('agent-message');
+      setActiveResponseMessageId(assistantMessageId);
       if (validated.value.kind === 'actionDraft') onPreviewDraft?.(validated.value.action);
-      setConversation((current) => [...current, createTurn('assistant', conversationSummary(validated.value))]);
+      appendMessageToSession(requestSession.id, { id: assistantMessageId, role: 'assistant', text: conversationSummary(validated.value), response: validated.value });
       setStatus('ready');
     } catch (nextError) {
       if (requestSerialRef.current !== requestSerial) return;
       if (controller.signal.aborted) {
         setStatus('cancelled');
-        setConversation((current) => [...current, createTurn('tool', '请求已取消。')]);
+        appendMessageToSession(requestSession.id, { role: 'status', text: '请求已取消。' });
       } else {
+        const message = nextError instanceof Error ? nextError.message : 'Agent 请求失败。';
         setStatus('error');
-        setError(nextError instanceof Error ? nextError.message : 'Agent 请求失败。');
+        setError(message);
+        appendMessageToSession(requestSession.id, { role: 'status', text: `请求失败：${message}` });
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
@@ -124,20 +249,20 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
   };
 
   const discardDraft = () => {
-    if (pendingCommand?.source === 'agent') onCancelPending?.();
-    setResponse(null);
+    if (effectivePendingCommand?.source === 'agent') cancelPendingPreview();
+    setActiveResponseMessageId(null);
     setError(null);
     setDebugOpen(false);
     setPlanStatuses({});
     setStatus('idle');
-    setConversation((current) => [...current, createTurn('tool', '已丢弃操作草稿。')]);
+    appendActiveStatus('已丢弃操作草稿。');
   };
 
   const executeDraft = (command: OperationCommand) => {
     const result = onExecute(command);
-    setConversation((current) => [...current, createTurn('tool', result.message)]);
+    appendActiveStatus(result.message);
     if (!result.requiresConfirmation && (result.status === 'applied' || result.status === 'rejected')) {
-      setResponse(null);
+      setActiveResponseMessageId(null);
       setDebugOpen(false);
       setPlanStatuses({});
     }
@@ -153,18 +278,87 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
       }
       nextStatuses[step.id] = result.status === 'failed' ? 'failed' : 'blocked';
       setPlanStatuses((current) => ({ ...current, ...nextStatuses }));
-      setConversation((current) => [...current, createTurn('tool', `${step.title}: ${result.message}`)]);
+      appendActiveStatus(`${step.title}: ${result.message}`);
       return;
     }
     setPlanStatuses((current) => ({ ...current, ...nextStatuses }));
-    setConversation((current) => [...current, createTurn('tool', '计划步骤已全部提交。')]);
+    appendActiveStatus('计划步骤已全部提交。');
+  };
+
+  const confirmPendingDraft = () => {
+    appendActiveStatus('已确认应用操作草稿。');
+    onConfirmPending?.();
   };
 
   return (
-    <div className="panel-body stacked agent-review-surface">
-      <section className="agent-prompt-card" aria-label="AI command prompt">
-        <SelectionPills selectedMeshes={selectedMeshes} />
-        <div className="agent-chat-input-row">
+    <div className="panel-body stacked agent-review-surface agent-chat-shell">
+      <div className="agent-session-header" aria-label="Current chat session">
+        <div>
+          <strong>{activeSession.title}</strong>
+          <span className="agent-mode-chip">{statusLabel(status)}</span>
+        </div>
+        <div className="button-row no-wrap">
+          <button type="button" className="icon-button" aria-label="新建聊天" title="新建聊天" onClick={createNewSession}>
+            <Plus size={15} aria-hidden="true" />
+          </button>
+          <button type="button" className="icon-button" aria-label="历史会话" title="历史会话" aria-expanded={historyOpen} onClick={() => setHistoryOpen((open) => !open)}>
+            <History size={15} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      {historyOpen ? (
+        <section className="agent-session-picker" aria-label="历史会话列表">
+          {sessionState.sessions.map((session) => (
+            <button key={session.id} type="button" className={session.id === activeSession.id ? 'active' : ''} onClick={() => openSession(session.id)}>
+              {session.title}
+            </button>
+          ))}
+        </section>
+      ) : null}
+
+      {activeSession.messages.length === 0 ? (
+        <section className="agent-starter-prompts agent-chip-row chip-row" aria-label="Starter prompts">
+          {examples.map((example) => (
+            <button key={example} disabled={status === 'loading'} onClick={() => void sendRequest(example)}>{example}</button>
+          ))}
+        </section>
+      ) : null}
+
+      <ConversationFeed
+        messages={activeSession.messages}
+        loading={status === 'loading'}
+        activeResponseMessageId={activeResponseMessageId}
+        debugOpen={debugOpen}
+        planStatuses={planStatuses}
+        onToggleDebug={() => setDebugOpen((open) => !open)}
+        onDiscardDraft={discardDraft}
+        onExecuteDraft={executeDraft}
+        onConfirmPending={confirmPendingDraft}
+        onExecutePlan={executePlan}
+        pendingCommand={effectivePendingCommand}
+      />
+
+      {error ? (
+        <section className="agent-review-card blocked parse-card danger">
+          <div className="agent-review-head">
+            <span className="review-kicker">错误</span>
+            <strong>请求失败</strong>
+          </div>
+          <p>{error}</p>
+        </section>
+      ) : null}
+
+      <section className="agent-composer" aria-label="AI composer">
+        <div className="agent-context-chips">
+          <SelectionPills selectedMeshes={selectedMeshes} />
+          <div className="agent-chip-row chip-row" aria-label="Scene context">
+            <span>Scene</span>
+            <span>{historyEntries.length} history</span>
+            {effectivePendingCommand ? <span>Pending draft</span> : null}
+          </div>
+        </div>
+        <div className="agent-composer-input-row">
           <textarea
             id="agent-command-input"
             aria-label="AI 指令输入"
@@ -174,8 +368,15 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
             placeholder="描述要审阅的 3D 操作"
           />
         </div>
-        <div className="agent-prompt-footer">
-          <span className="agent-mode-chip">{adapter.label}</span>
+        <div className="agent-composer-controls" aria-label="AI request controls">
+          <select aria-label="AI mode" value={activeSession.mode} onChange={(event) => updateActiveSession({ mode: event.target.value as AgentMode })}>
+            <option value="ask">Ask</option>
+            <option value="edit">Edit</option>
+            <option value="agent">Agent</option>
+          </select>
+          <select aria-label="模型 router" value={activeSession.modelRouterId} onChange={(event) => updateActiveSession({ modelRouterId: event.target.value as ModelRouterId })}>
+            <option value="default-router">Default router</option>
+          </select>
           <button
             type="button"
             className={`agent-send-button ${status === 'loading' ? 'is-stopping' : ''}`}
@@ -188,37 +389,6 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
           </button>
         </div>
       </section>
-
-      <div className="agent-chip-row chip-row" aria-label="Example prompts">
-        {examples.map((example) => (
-          <button key={example} disabled={status === 'loading'} onClick={() => void sendRequest(example)}>{example}</button>
-        ))}
-      </div>
-
-      <ConversationFeed conversation={conversation} loading={status === 'loading'} />
-
-      {error ? (
-        <section className="agent-review-card blocked parse-card danger">
-          <div className="agent-review-head">
-            <span className="review-kicker">错误</span>
-            <strong>请求失败</strong>
-          </div>
-          <p>{error}</p>
-        </section>
-      ) : null}
-
-      <AgentResponseView
-        response={response}
-        debugOpen={debugOpen}
-        planStatuses={planStatuses}
-        onToggleDebug={() => setDebugOpen((open) => !open)}
-        onDiscardDraft={discardDraft}
-        onExecuteDraft={executeDraft}
-        onConfirmPending={onConfirmPending}
-        onExecutePlan={executePlan}
-        pendingCommand={pendingCommand}
-      />
-
     </div>
   );
 }
@@ -242,8 +412,36 @@ function SelectionPills({ selectedMeshes }: { selectedMeshes: MeshEntity[] }) {
   );
 }
 
-function ConversationFeed({ conversation, loading }: { conversation: AgentConversationTurn[]; loading: boolean }) {
-  if (conversation.length === 0 && !loading) {
+const noop = () => undefined;
+const noopExecuteDraft = (_command: OperationCommand) => undefined;
+const noopExecutePlan = (_steps: AgentPlanStep[]) => undefined;
+
+function ConversationFeed({
+  messages,
+  loading,
+  activeResponseMessageId,
+  debugOpen,
+  planStatuses,
+  onToggleDebug,
+  onDiscardDraft,
+  onExecuteDraft,
+  onConfirmPending,
+  onExecutePlan,
+  pendingCommand,
+}: {
+  messages: AgentChatMessage[];
+  loading: boolean;
+  activeResponseMessageId: string | null;
+  debugOpen: boolean;
+  planStatuses: Record<string, PlanStepStatus>;
+  onToggleDebug: () => void;
+  onDiscardDraft: () => void;
+  onExecuteDraft: (command: OperationCommand) => void;
+  onConfirmPending?: () => void;
+  onExecutePlan: (steps: AgentPlanStep[]) => void;
+  pendingCommand: OperationCommand | null;
+}) {
+  if (messages.length === 0 && !loading) {
     return (
       <section className="agent-conversation-feed" aria-label="AI conversation feed">
         <div className="agent-message assistant">
@@ -256,12 +454,35 @@ function ConversationFeed({ conversation, loading }: { conversation: AgentConver
 
   return (
     <section className="agent-conversation-feed" aria-label="AI conversation feed">
-      {conversation.slice(-6).map((turn) => (
-        <div key={turn.id} className={`agent-message ${turn.role}`}>
-          <span className="agent-message-role">{turn.role === 'user' ? 'You' : turn.role === 'assistant' ? 'Assistant' : 'Status'}</span>
-          <p>{turn.text}</p>
+      {messages.map((message) => {
+        const displayRole = message.role === 'status' || message.role === 'tool' ? 'tool' : message.role;
+        const responseReadOnly = message.id !== activeResponseMessageId;
+
+        return (
+        <div key={message.id} className={`agent-message ${displayRole}`}>
+          <span className="agent-message-role">{message.role === 'user' ? 'You' : message.role === 'assistant' ? 'Assistant' : 'Status'}</span>
+          <div className="agent-message-body">
+            <p>{message.text}</p>
+            {message.response ? (
+              <div className="agent-inline-response-card">
+                <AgentResponseView
+                  response={message.response}
+                  readOnly={responseReadOnly}
+                  debugOpen={!responseReadOnly && debugOpen}
+                  planStatuses={responseReadOnly ? {} : planStatuses}
+                  onToggleDebug={responseReadOnly ? noop : onToggleDebug}
+                  onDiscardDraft={responseReadOnly ? noop : onDiscardDraft}
+                  onExecuteDraft={responseReadOnly ? noopExecuteDraft : onExecuteDraft}
+                  onConfirmPending={responseReadOnly ? noop : onConfirmPending}
+                  onExecutePlan={responseReadOnly ? noopExecutePlan : onExecutePlan}
+                  pendingCommand={responseReadOnly ? null : pendingCommand}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
-      ))}
+        );
+      })}
       {loading ? (
         <div className="agent-message tool">
           <span className="agent-message-role">Status</span>
@@ -274,6 +495,7 @@ function ConversationFeed({ conversation, loading }: { conversation: AgentConver
 
 function AgentResponseView({
   response,
+  readOnly = false,
   debugOpen,
   planStatuses,
   onToggleDebug,
@@ -284,6 +506,7 @@ function AgentResponseView({
   pendingCommand,
 }: {
   response: AgentResponse | null;
+  readOnly?: boolean;
   debugOpen: boolean;
   planStatuses: Record<string, PlanStepStatus>;
   onToggleDebug: () => void;
@@ -345,18 +568,20 @@ function AgentResponseView({
             </div>
           ))}
         </div>
-        <div className="agent-review-actions">
-          <button onClick={onDiscardDraft}>
-            <X size={15} /> 丢弃草稿
-          </button>
-          <button onClick={onToggleDebug} aria-expanded={debugOpen}>
-            {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} JSON
-          </button>
-          <button className="primary-button" onClick={() => onExecutePlan(response.steps)}>
-            <Play size={15} /> 逐步执行
-          </button>
-        </div>
-        {debugOpen ? <DebugDrawer payload={response} /> : null}
+        {readOnly ? <span className="agent-historical-note">历史草稿仅供查看</span> : (
+          <div className="agent-review-actions">
+            <button onClick={onDiscardDraft}>
+              <X size={15} /> 丢弃草稿
+            </button>
+            <button onClick={onToggleDebug} aria-expanded={debugOpen}>
+              {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} JSON
+            </button>
+            <button className="primary-button" onClick={() => onExecutePlan(response.steps)}>
+              <Play size={15} /> 逐步执行
+            </button>
+          </div>
+        )}
+        {!readOnly && debugOpen ? <DebugDrawer payload={response} /> : null}
       </section>
     );
   }
@@ -384,18 +609,20 @@ function AgentResponseView({
             </div>
           ))}
         </div>
-        <div className="agent-review-actions">
-          <button onClick={onDiscardDraft}>
-            <X size={15} /> 丢弃草稿
-          </button>
-          <button onClick={onToggleDebug} aria-expanded={debugOpen}>
-            {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} JSON
-          </button>
-          <button className="primary-button" onClick={() => onExecutePlan(response.steps)}>
-            <Play size={15} /> 逐步执行
-          </button>
-        </div>
-        {debugOpen ? <DebugDrawer payload={response} /> : null}
+        {readOnly ? <span className="agent-historical-note">历史草稿仅供查看</span> : (
+          <div className="agent-review-actions">
+            <button onClick={onDiscardDraft}>
+              <X size={15} /> 丢弃草稿
+            </button>
+            <button onClick={onToggleDebug} aria-expanded={debugOpen}>
+              {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} JSON
+            </button>
+            <button className="primary-button" onClick={() => onExecutePlan(response.steps)}>
+              <Play size={15} /> 逐步执行
+            </button>
+          </div>
+        )}
+        {!readOnly && debugOpen ? <DebugDrawer payload={response} /> : null}
       </section>
     );
   }
@@ -428,11 +655,13 @@ function AgentResponseView({
           <div className="agent-review-row"><span>类型</span><strong>{response.jobKind}</strong></div>
           <div className="agent-review-row"><span>状态</span><strong>等待未来 job worker</strong></div>
         </div>
-        <div className="agent-review-actions">
-          <button onClick={onDiscardDraft}>
-            <X size={15} /> 丢弃草稿
-          </button>
-        </div>
+        {readOnly ? <span className="agent-historical-note">历史草稿仅供查看</span> : (
+          <div className="agent-review-actions">
+            <button onClick={onDiscardDraft}>
+              <X size={15} /> 丢弃草稿
+            </button>
+          </div>
+        )}
       </section>
     );
   }
@@ -459,18 +688,20 @@ function AgentResponseView({
         ))}
       </div>
       <RiskNote risk={response.risk} />
-      <div className="agent-review-actions">
-        <button onClick={onDiscardDraft}>
-          <X size={15} /> 丢弃草稿
-        </button>
-        <button onClick={onToggleDebug} aria-expanded={debugOpen}>
-          {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} JSON
-        </button>
-        <button className="primary-button" onClick={() => (pendingMatchesDraft ? onConfirmPending?.() : onExecuteDraft(response.action))} disabled={pendingMatchesDraft && !onConfirmPending}>
-          {pendingMatchesDraft ? <Check size={15} /> : <Sparkles size={15} />} {pendingMatchesDraft ? '确认应用' : '确认执行'}
-        </button>
-      </div>
-      {debugOpen ? <DebugDrawer payload={response} /> : null}
+      {readOnly ? <span className="agent-historical-note">历史草稿仅供查看</span> : (
+        <div className="agent-review-actions">
+          <button onClick={onDiscardDraft}>
+            <X size={15} /> 丢弃草稿
+          </button>
+          <button onClick={onToggleDebug} aria-expanded={debugOpen}>
+            {debugOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} JSON
+          </button>
+          <button className="primary-button" onClick={() => (pendingMatchesDraft ? onConfirmPending?.() : onExecuteDraft(response.action))} disabled={pendingMatchesDraft && !onConfirmPending}>
+            {pendingMatchesDraft ? <Check size={15} /> : <Sparkles size={15} />} {pendingMatchesDraft ? '确认应用' : '确认执行'}
+          </button>
+        </div>
+      )}
+      {!readOnly && debugOpen ? <DebugDrawer payload={response} /> : null}
     </section>
   );
 }
@@ -503,8 +734,39 @@ function getAgentEndpoint(): string | undefined {
   return env?.VITE_AGENT_API_URL || '/api/agent/respond';
 }
 
-function createTurn(role: AgentConversationTurn['role'], turnText: string): AgentConversationTurn {
-  return { id: createId(role), role, text: turnText, timestamp: new Date().toISOString() };
+function createInitialSessionState(scene: SceneState, historyEntries: HistoryEntry[]): AgentSessionState {
+  const storedSessions = loadAgentChatSessions();
+  if (storedSessions.length > 0) {
+    return { sessions: storedSessions, activeSessionId: storedSessions[0].id };
+  }
+
+  const session = createAgentChatSession(summarizeSessionContext(scene, historyEntries));
+  saveAgentChatSessions([session]);
+  return { sessions: [session], activeSessionId: session.id };
+}
+
+function getActiveSession(sessionState: AgentSessionState): AgentChatSession {
+  return sessionState.sessions.find((session) => session.id === sessionState.activeSessionId) ?? sessionState.sessions[0];
+}
+
+function sessionMessagesToConversation(messages: AgentChatMessage[]): AgentConversationTurn[] {
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.role === 'status' ? 'tool' : message.role,
+    text: message.text,
+    timestamp: message.createdAt,
+  }));
+}
+
+function statusLabel(status: AgentStatus): string {
+  const labels: Record<AgentStatus, string> = {
+    idle: 'Idle',
+    loading: 'Generating',
+    ready: 'Ready',
+    error: 'Error',
+    cancelled: 'Cancelled',
+  };
+  return labels[status];
 }
 
 function createId(prefix: string): string {
@@ -519,6 +781,16 @@ function conversationSummary(response: AgentResponse) {
   if (response.kind === 'sceneAnswer') return response.answer;
   if (response.kind === 'backendJobDraft') return `后端作业草稿: ${response.title}`;
   return `${commandTitle(response.action)} 已生成，确认前请检查参数。`;
+}
+
+function responseAllowedInMode(mode: AgentMode, response: AgentResponse): true | string {
+  if (mode === 'ask' && (response.kind === 'actionDraft' || response.kind === 'actionPlan' || response.kind === 'macroDraft' || response.kind === 'backendJobDraft')) {
+    return 'Ask 模式只回答场景和能力问题；请切换到 Edit 或 Agent 模式来生成操作草稿。';
+  }
+  if (mode === 'edit' && (response.kind === 'actionPlan' || response.kind === 'macroDraft')) {
+    return 'Edit 模式一次只生成一个操作草稿；请切换到 Agent 模式来规划多步操作。';
+  }
+  return true;
 }
 
 function statusGlyph(status: PlanStepStatus | undefined, fallback: number): string {

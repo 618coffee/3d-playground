@@ -15,7 +15,7 @@ export async function callLlmProvider(request, config) {
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt() },
-        { role: 'user', content: JSON.stringify(providerPayload(request)) },
+        { role: 'user', content: JSON.stringify(buildProviderPayload(request)) },
       ],
     });
 
@@ -100,7 +100,7 @@ function summarizeOpenAiError(error) {
   };
 }
 
-function systemPrompt() {
+export function systemPrompt() {
   return [
     'You are a controlled CAD/CAE operation planner for a local browser workbench.',
     'Return only one JSON object matching AgentResponse. Do not include Markdown.',
@@ -113,12 +113,17 @@ function systemPrompt() {
     'Map XY plane to normal [0,0,1], XZ plane to normal [0,1,0], and YZ plane to normal [1,0,0]. Phrases like whole model, entire model, 全部, 所有, or 整个模型 should target { source: "allVisible" }.',
     'Do not ask whether to use visual clipping or permanent geometry for simple plane clips; default to reversible visual clipping with cap true.',
     'Only return backendJobDraft for explicitly permanent, baked, boolean, exported, meshed, solver, or result-extraction work.',
+    'Mode guidance is strict. Ask mode should answer questions about scene metadata, selected objects, operation history, supported capabilities, or pending state. In Ask mode, prefer message, clarification, or sceneAnswer and do not create executable operation drafts.',
+    'Edit mode should produce at most one reviewed actionDraft for a concrete scene operation. If the user asks for multiple coordinated steps in Edit mode, ask them to switch to Agent mode.',
+    'Agent mode may return actionPlan, macroDraft, or actionDraft, but every operation remains a reviewed draft and must not bypass confirmation.',
   ].join(' ');
 }
 
-function providerPayload(request) {
+export function buildProviderPayload(request) {
   return {
     text: request.text,
+    mode: request.mode ?? 'edit',
+    modelRouterId: request.modelRouterId ?? 'default-router',
     scene: request.scene,
     conversation: request.conversation,
     schemas: {

@@ -6,6 +6,10 @@ const MAX_TEXT_LENGTH = 8000;
 const MAX_HISTORY_ITEMS = 12;
 const MAX_PLAN_STEPS = 8;
 const MESH_SOURCE_FORMATS = ['procedural', 'stl', 'obj', 'ply', 'vtp', 'vtu', 'vtk'];
+const AGENT_MODES = ['ask', 'edit', 'agent'];
+const MODEL_ROUTER_IDS = ['default-router'];
+const DEFAULT_AGENT_MODE = 'edit';
+const DEFAULT_MODEL_ROUTER_ID = 'default-router';
 
 export function validateAgentRequest(input) {
   if (!isRecord(input)) {
@@ -21,10 +25,14 @@ export function validateAgentRequest(input) {
   const scene = validateScene(input.scene ?? context?.scene);
 
   return {
-    requestId: optionalString(input.requestId, 'requestId', 128) ?? randomUUID(),
+    requestId: optionalString(input.requestId ?? input.id, 'requestId', 128) ?? randomUUID(),
+    sessionId: optionalString(input.sessionId, 'sessionId', 160),
     text,
+    mode: input.mode === undefined ? DEFAULT_AGENT_MODE : enumValue(input.mode, AGENT_MODES, 'mode'),
+    modelRouterId: input.modelRouterId === undefined ? DEFAULT_MODEL_ROUTER_ID : enumValue(input.modelRouterId, MODEL_ROUTER_IDS, 'modelRouterId'),
     scene,
     pendingAction: isRecord(input.pendingAction) ? input.pendingAction : undefined,
+    pendingCommand: isRecord(input.pendingCommand) ? input.pendingCommand : undefined,
     conversation: validateConversation(input.conversation ?? input.messages),
   };
 }

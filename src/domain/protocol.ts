@@ -46,9 +46,54 @@ export type AgentConversationTurn = {
   timestamp: string;
 };
 
+export const AGENT_MODES = ['ask', 'edit', 'agent'] as const;
+export type AgentMode = (typeof AGENT_MODES)[number];
+
+export const MODEL_ROUTER_IDS = ['default-router'] as const;
+export type ModelRouterId = (typeof MODEL_ROUTER_IDS)[number];
+
+export type AgentSessionContextSummary = {
+  meshCount: number;
+  selectedMeshIds: string[];
+  historyCount: number;
+};
+
+export type AgentChatMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'tool' | 'status';
+  text: string;
+  request?: {
+    text: string;
+    mode: AgentMode;
+    modelRouterId: ModelRouterId;
+  };
+  response?: AgentResponse;
+  createdAt: string;
+};
+
+export type AgentChatSession = {
+  id: string;
+  title: string;
+  mode: AgentMode;
+  modelRouterId: ModelRouterId;
+  messages: AgentChatMessage[];
+  context: AgentSessionContextSummary;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AgentRequestMetadata = {
+  sessionId?: string;
+  mode: AgentMode;
+  modelRouterId: ModelRouterId;
+};
+
 export type AgentRequest = {
   id: string;
+  sessionId?: string;
   text: string;
+  mode?: AgentMode;
+  modelRouterId?: ModelRouterId;
   scene: SceneState;
   conversation: AgentConversationTurn[];
   pendingCommand?: OperationCommand | null;

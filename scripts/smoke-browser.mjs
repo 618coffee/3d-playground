@@ -38,7 +38,7 @@ try {
   await waitForAppReady(client, diagnostics);
   await client.send('Runtime.evaluate', { expression: 'document.fonts?.ready', awaitPromise: true });
 
-  const smokeResult = await evaluate(client, async () => {
+  let smokeResult = await evaluate(client, async () => {
     const byText = (text) => [...document.querySelectorAll('button, span, strong, div')].find((item) => item.textContent?.includes(text));
     const byTitle = (title) => document.querySelector(`[title="${title}"]`);
     const waitForUi = async (predicate, timeoutMs = 2000) => {
@@ -67,6 +67,17 @@ try {
     if (!textarea) {
       throw new Error(`AI textarea not found at ${location.href}; body=${document.body.innerText.slice(0, 300)}`);
     }
+    const newChatButton = [...document.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === '新建聊天');
+    if (!(newChatButton instanceof HTMLButtonElement)) {
+      throw new Error('New chat button not found');
+    }
+    newChatButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const modeSelect = document.querySelector('select[aria-label="AI mode"]');
+    const modeOptions = modeSelect instanceof HTMLSelectElement ? [...modeSelect.options].map((option) => option.textContent?.trim()) : [];
+    const hasModeSegments = modeSelect instanceof HTMLSelectElement && modeOptions.includes('Ask') && modeOptions.includes('Edit') && modeOptions.includes('Agent');
+    const routerSelect = document.querySelector('select[aria-label="模型 router"]');
+    const hasRouterSelect = routerSelect instanceof HTMLSelectElement && routerSelect.value === 'default-router';
     textarea.value = '把当前对象绕 Z 轴旋转 30 度';
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     const sendButton = document.querySelector('button[aria-label="发送指令"]');
@@ -81,6 +92,8 @@ try {
       ...document.querySelectorAll('.history-header-actions span, .agent-message p, .agent-review-card strong, .agent-review-card p, button'),
     ].map((item) => item.textContent?.trim()).filter(Boolean).slice(0, 24);
     const rotationSkippedTimeline = !timelineTypes().includes('rotateMesh');
+    const storedSessionsBeforeReload = JSON.parse(localStorage.getItem('industrial-sim.agentChatSessions.v1') || '[]');
+    const hasStoredAiSession = storedSessionsBeforeReload.some((session) => session.messages?.some((message) => message.text?.includes('把当前对象绕 Z 轴旋转 30 度')));
 
     const workspaceSelect = document.querySelector('.workspace-select select');
     if (!(workspaceSelect instanceof HTMLSelectElement)) {
@@ -191,13 +204,23 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 80));
     const panelsRestored = Boolean(document.querySelector('.left-panel') && document.querySelector('.right-panel') && document.querySelector('.history-panel'));
 
-    return { hasCanvas, canvasVisible, hasSample, rotationSkippedTimeline, hasStatus, statusTexts, hasRobotSample, robotCanvasVisible, selectedRows, dragRotateAvailable, dragRotateSkippedTimeline, panelsHidden, restoreButtonsVisible, restoredFromCanvas, layoutRectsAligned, resizedLeftPanel, initialScaleMidpoint, scaleRangeBounded, customScaleUpdatesNumber, hasViewScaleStatus, viewScaleSkippedTimeline, viewScaleInViewport, viewScaleInInspector, objectScaleRemoved, panelsRestored };
+    return { hasCanvas, canvasVisible, hasSample, hasModeSegments, hasRouterSelect, hasStoredAiSession, rotationSkippedTimeline, hasStatus, statusTexts, hasRobotSample, robotCanvasVisible, selectedRows, dragRotateAvailable, dragRotateSkippedTimeline, panelsHidden, restoreButtonsVisible, restoredFromCanvas, layoutRectsAligned, resizedLeftPanel, initialScaleMidpoint, scaleRangeBounded, customScaleUpdatesNumber, hasViewScaleStatus, viewScaleSkippedTimeline, viewScaleInViewport, viewScaleInInspector, objectScaleRemoved, panelsRestored };
   });
+
+  await client.send('Page.reload', { ignoreCache: true });
+  await waitForLoad(client);
+  await waitForAppReady(client, diagnostics);
+  const restoredSessionVisible = await evaluate(client, () => document.body.innerText.includes('把当前对象绕 Z 轴旋转 30 度'));
+  smokeResult = { ...smokeResult, restoredSessionVisible };
 
   if (
     !smokeResult.hasCanvas
     || !smokeResult.canvasVisible.ok
     || !smokeResult.hasSample
+    || !smokeResult.hasModeSegments
+    || !smokeResult.hasRouterSelect
+    || !smokeResult.hasStoredAiSession
+    || !smokeResult.restoredSessionVisible
     || !smokeResult.rotationSkippedTimeline
     || !smokeResult.hasStatus
     || !smokeResult.hasRobotSample
