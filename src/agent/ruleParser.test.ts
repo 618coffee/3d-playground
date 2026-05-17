@@ -105,6 +105,17 @@ describe('rule parser', () => {
     expect(result.action.params).toMatchObject({ count: 2, offset: [20, 0, 0], unit: 'mm' });
   });
 
+  it('parses Chinese move commands for the current selection', () => {
+    const result = parser.parse('将选中对象沿着x轴正方向移动20mm', scene);
+
+    expect(result.kind).toBe('action');
+    if (result.kind !== 'action') return;
+    expect(result.action.type).toBe('moveMesh');
+    expect(result.action.target).toEqual({ source: 'selection' });
+    expect(result.action.params).toMatchObject({ offset: [20, 0, 0], unit: 'mm' });
+    expect(result.confidence).toBeGreaterThan(0.8);
+  });
+
   it('parses clone commands with count and x offset', () => {
     const result = parser.parse('复制选中对象 3 个，沿 X 方向间隔 20mm', scene);
 

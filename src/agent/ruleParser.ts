@@ -11,7 +11,7 @@ const axisMap: Record<string, 'x' | 'y' | 'z'> = {
   Z: 'z',
 };
 
-type ParserCommand = 'select' | 'rotate' | 'clone' | 'clip';
+type ParserCommand = 'select' | 'move' | 'rotate' | 'clone' | 'clip';
 
 export function createRuleParser(): AgentParser {
   return {
@@ -45,6 +45,26 @@ export function createRuleParser(): AgentParser {
           source: 'agent',
           rawText: text,
         }, 0.82, false, '选择匹配的对象。');
+      }
+
+      if (isMoveCommand(normalized)) {
+        const target = resolveTarget(normalized, scene, 'move');
+        if (!target) {
+          return targetClarification(scene);
+        }
+        const axis = parseAxis(normalized) ?? 'x';
+        const distance = parseMoveDistance(normalized, axis);
+        if (distance === undefined) {
+          return { kind: 'clarification', question: '要移动多少距离？', suggestions: ['沿 X 轴正方向移动 20mm', '沿 Z 轴上移 10mm'] };
+        }
+        return actionResult({
+          id: createActionId('move'),
+          type: 'moveMesh',
+          target,
+          params: { offset: offsetForAxis(axis, distance), unit: scene.unit },
+          source: 'agent',
+          rawText: text,
+        }, 0.9, false, `沿 ${axis.toUpperCase()} 方向移动 ${distance}${scene.unit}。`);
       }
 
       if (/(旋转|转动|rotate|turn|spin)/i.test(normalized)) {
@@ -148,10 +168,15 @@ function createActionId(prefix: string): string {
 }
 
 function isSelectCommand(text: string): boolean {
-  if (/(复制|克隆|copy|clone|duplicate|旋转|转动|rotate|turn|spin|切|裁剪|剖|clip|cut|section|slice)/i.test(text)) {
+  if (/(复制|克隆|copy|clone|duplicate|移动|平移|move|translate|shift|旋转|转动|rotate|turn|spin|切|裁剪|剖|clip|cut|section|slice)/i.test(text)) {
     return false;
   }
   return /^(选择|选中)\s*/.test(text) || /^(select|choose|pick)\b/i.test(text);
+}
+
+function isMoveCommand(text: string): boolean {
+  if (/(复制|克隆|copy|clone|duplicate)/i.test(text)) return false;
+  return /(移动|平移|move|translate|shift)/i.test(text);
 }
 
 function resolveTarget(text: string, scene: SceneState, command: ParserCommand): MeshTarget | undefined {
@@ -176,6 +201,7 @@ function resolveTarget(text: string, scene: SceneState, command: ParserCommand):
 
 function extractTargetName(text: string, command: ParserCommand): string | undefined {
   let targetText = stripCommandWords(text, command);
+  if (command === 'move') targetText = stripMoveDetails(targetText);
   if (command === 'rotate') targetText = stripRotateDetails(targetText);
   if (command === 'clone') targetText = stripCloneDetails(targetText);
   if (command === 'clip') targetText = stripClipDetails(targetText);
@@ -188,11 +214,24 @@ function extractTargetName(text: string, command: ParserCommand): string | undef
 function stripCommandWords(text: string, command: ParserCommand): string {
   const commandPatterns: Record<ParserCommand, RegExp> = {
     select: /\b(select|choose|pick)\b|选择|选中/gi,
+    move: /\b(move|translate|shift)\b|移动|平移/gi,
     rotate: /\b(rotate|turn|spin)\b|旋转|转动/gi,
     clone: /\b(copy|clone|duplicate)\b|复制|克隆/gi,
     clip: /\b(clip|cut|section|slice)\b|切开|切割|裁剪|剖切|剖/gi,
   };
   return text.replace(commandPatterns[command], ' ');
+}
+
+function stripMoveDetails(text: string): string {
+  return text
+    .replace(/沿着?\s*[XYZxyz]\s*(轴|方向)?\s*(正|负)?\s*(方向|向)?/g, ' ')
+    .replace(/[XYZxyz]\s*(轴|方向)\s*(正|负)?\s*(方向|向)?/g, ' ')
+    .replace(/(正|负)\s*(方向|向)/g, ' ')
+    .replace(/(?:向|往)?\s*(左|右|上|下|前|后)\s*/g, ' ')
+    .replace(/-?\d+(?:\.\d+)?\s*(mm|毫米|cm|厘米|m|米)/gi, ' ')
+    .replace(/\b(?:along|on)\s+(?:the\s+)?[XYZxyz]\s*(?:-?\s*(?:axis|direction))?\b/gi, ' ')
+    .replace(/\b(?:positive|negative|plus|minus)\s+(?:direction|side)?\b/gi, ' ')
+    .replace(/\b(?:by|offset|distance|spacing)\s*(?:of\s+)?-?\d+(?:\.\d+)?\s*(mm|cm|m)?\b/gi, ' ');
 }
 
 function stripRotateDetails(text: string): string {
@@ -323,6 +362,32 @@ function parseDistance(text: string): number | undefined {
   const unitMatches = [...text.matchAll(/(-?\d+(?:\.\d+)?)\s*(mm|毫米|cm|厘米|m|米)/gi)];
   const last = unitMatches[unitMatches.length - 1];
   return last ? Number(last[1]) : undefined;
+}
+
+function parseMoveDistance(text: string, axis: 'x' | 'y' | 'z'): number | undefined {
+  const distance = parseDistance(text) ?? parseFirstStandaloneNumber(text);
+  if (distance === undefined) return undefined;
+  const sign = parseDirectionSign(text, axis);
+  if (sign && distance >= 0) return distance * sign;
+  return distance;
+}
+
+function parseDirectionSign(text: string, axis: 'x' | 'y' | 'z'): 1 | -1 | undefined {
+  if (/(negative|minus|负方向|负向|负侧)/i.test(text)) return -1;
+  if (/(positive|plus|正方向|正向|正侧)/i.test(text)) return 1;
+  if (axis === 'x') {
+    if (/(左|\bleft\b)/i.test(text)) return -1;
+    if (/(右|\bright\b)/i.test(text)) return 1;
+  }
+  if (axis === 'y') {
+    if (/(后|\bback\b)/i.test(text)) return -1;
+    if (/(前|\bfront\b)/i.test(text)) return 1;
+  }
+  if (axis === 'z') {
+    if (/(下|\bdown\b|\blower\b|\bbottom\b)/i.test(text)) return -1;
+    if (/(上|\bup\b|\bupper\b|\btop\b)/i.test(text)) return 1;
+  }
+  return undefined;
 }
 
 function parsePlaneOrigin(text: string): number | undefined {
