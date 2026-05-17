@@ -38,12 +38,13 @@ export function createOperationExecutor(history: HistoryStore, runtime?: ViewerR
       if (command.type === 'clipMesh' && command.params.mode === 'preview') {
         const clip = commandToClip(command);
         targetIds.forEach((meshId) => runtime?.previewClip?.(meshId, clip));
+        const requiresPreviewConfirmation = command.source !== 'ui';
         return {
           actionId: command.id,
           status: 'preview',
-          message: '已生成切割预览，确认后再应用。',
+          message: requiresPreviewConfirmation ? '已生成切割预览，确认后再应用。' : '已生成切割预览。',
           affectedMeshIds: targetIds,
-          requiresConfirmation: true,
+          requiresConfirmation: requiresPreviewConfirmation,
           warnings: ['切割会改变可见几何范围，请先检查预览。'],
         };
       }
@@ -229,7 +230,7 @@ function updateSelection(current: string[], targetIds: string[], mode: 'replace'
 }
 
 function historyPolicy(command: OperationCommand, scene: SceneState, nextScene: SceneState): { mode: 'record' | 'update' | 'ignore'; message?: string } {
-  if (command.type === 'rotateMesh' && command.source !== 'agent') return { mode: 'update' };
+  if (command.type === 'rotateMesh' && command.source === 'ui' && command.rawText === 'viewport drag rotate') return { mode: 'update' };
   if (command.type === 'selectMesh' && sameStringList(scene.selection, nextScene.selection)) {
     return { mode: 'ignore', message: '选择未变化。' };
   }

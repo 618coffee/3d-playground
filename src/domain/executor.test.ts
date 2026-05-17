@@ -23,15 +23,16 @@ const mesh: MeshEntity = {
 };
 
 describe('operation executor', () => {
-  it('keeps ui rotate updates out of history', () => {
+  it('keeps viewport drag rotate updates out of history', () => {
     const history = createHistoryStore(createInitialScene([mesh]));
     const executor = createOperationExecutor(history);
     const command: OperationCommand = {
-      id: 'rotate-1',
+      id: 'drag-rotate-1',
       type: 'rotateMesh',
       target: { source: 'selection' },
       params: { axis: 'z', angleDeg: 30, pivot: 'boundsCenter', space: 'world' },
       source: 'ui',
+      rawText: 'viewport drag rotate',
     };
 
     const result = executor.execute(command);
@@ -40,6 +41,25 @@ describe('operation executor', () => {
     expect(result.affectedMeshIds).toEqual(['fan-1']);
     expect(history.current().meshes[0].transform.rotationDeg).toEqual([0, 0, 30]);
     expect(history.entries()).toHaveLength(0);
+  });
+
+  it('records manual ui rotate commands in history', () => {
+    const history = createHistoryStore(createInitialScene([mesh]));
+    const executor = createOperationExecutor(history);
+    const command: OperationCommand = {
+      id: 'manual-rotate-1',
+      type: 'rotateMesh',
+      target: { source: 'selection' },
+      params: { axis: 'z', angleDeg: 30, pivot: 'boundsCenter', space: 'world' },
+      source: 'ui',
+      rawText: '手动旋转 Z 轴 30 度',
+    };
+
+    const result = executor.execute(command);
+
+    expect(result.status).toBe('applied');
+    expect(history.current().meshes[0].transform.rotationDeg).toEqual([0, 0, 30]);
+    expect(history.entries().map((entry) => entry.command)).toEqual([command]);
   });
 
   it('records agent rotate commands in history', () => {

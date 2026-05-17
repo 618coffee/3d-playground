@@ -90,7 +90,7 @@ export default function App() {
     const after = historyRef.current.current();
     if (result.requiresConfirmation) {
       setPendingCommand(command);
-    } else if (result.status === 'applied' || result.status === 'failed' || result.status === 'rejected') {
+    } else if (result.status === 'preview' || result.status === 'applied' || result.status === 'failed' || result.status === 'rejected') {
       setPendingCommand(null);
     }
     if (command.type === 'cloneMesh') {

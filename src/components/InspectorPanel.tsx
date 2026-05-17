@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Bot, Check, PanelRightClose, SlidersHorizontal, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { Bot, Check, ChevronDown, ChevronUp, PanelRightClose, SlidersHorizontal, X } from 'lucide-react';
 import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import type { HistoryEntry } from '../domain/history';
 import type { SceneState } from '../domain/scene';
@@ -17,6 +17,8 @@ type InspectorPanelProps = {
   onPreviewDraft?: (command: OperationCommand) => void;
   onHidePanel?: () => void;
 };
+
+const axisOptions = ['x', 'y', 'z'] as const;
 
 export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEntries, pendingCommand, onConfirmPending, onCancelPending, onExecute, onPreviewDraft, onHidePanel }: InspectorPanelProps) {
   const [tab, setTab] = useState<'operations' | 'agent'>('agent');
@@ -106,89 +108,183 @@ export function PropertiesPanel({ mesh, selectedMeshes }: { mesh?: MeshEntity; s
 }
 
 function OperationsTab({ selectedMesh, selectedCount, scene, onExecute }: { selectedMesh?: MeshEntity; selectedCount: number; scene: SceneState; onExecute: (command: OperationCommand) => ActionResult }) {
-  const [angle, setAngle] = useState(30);
-  const [cloneCount, setCloneCount] = useState(2);
+  const [rotationAngles, setRotationAngles] = useState<Record<'x' | 'y' | 'z', number>>({ x: 0, y: 0, z: 0 });
+  const [cloneCount, setCloneCount] = useState(0);
   const [cloneAxis, setCloneAxis] = useState<'x' | 'y' | 'z'>('x');
-  const [cloneDistance, setCloneDistance] = useState(18);
+  const [cloneDistance, setCloneDistance] = useState(0);
   const [clipAxis, setClipAxis] = useState<'x' | 'y' | 'z'>('x');
   const [clipOrigin, setClipOrigin] = useState(0);
   const [keepSide, setKeepSide] = useState<'positive' | 'negative'>('positive');
+  const [clipPreviewActive, setClipPreviewActive] = useState(false);
   const disabled = !selectedMesh;
   const target = useMemo(() => ({ source: 'selection' }) as const, []);
+  const cloneDisabled = disabled || cloneCount <= 0 || cloneDistance <= 0;
+  const clipCommitDisabled = disabled || !clipPreviewActive;
+
+  const updateRotationAngle = (axis: 'x' | 'y' | 'z', value: number) => {
+    setRotationAngles((current) => ({ ...current, [axis]: value }));
+  };
+
+  const applyRotation = () => {
+    if (disabled) return;
+    const timestamp = Date.now();
+    axisOptions.forEach((axis) => {
+      const angleDeg = rotationAngles[axis];
+      if (angleDeg === 0) return;
+      onExecute({
+        id: `ui-rotate-${axis}-${timestamp}`,
+        type: 'rotateMesh',
+        target,
+        params: { axis, angleDeg, pivot: 'boundsCenter', space: 'world' },
+        source: 'ui',
+        rawText: `手动旋转 ${axis.toUpperCase()} 轴 ${angleDeg} 度`,
+      });
+    });
+  };
+
+  const previewClip = () => {
+    if (disabled) return;
+    const result = onExecute({ id: `ui-clip-preview-${Date.now()}`, type: 'clipMesh', target, params: { plane: { origin: originForAxis(clipAxis, clipOrigin), normal: normalForAxis(clipAxis) }, keepSide, mode: 'preview', cap: true }, source: 'ui', rawText: `手动预览 ${clipAxis.toUpperCase()}=${clipOrigin} 切割` });
+    if (result.status === 'preview') setClipPreviewActive(true);
+  };
+
+  const applyClip = () => {
+    if (clipCommitDisabled) return;
+    onExecute({ id: `ui-clip-apply-${Date.now()}`, type: 'clipMesh', target, params: { plane: { origin: originForAxis(clipAxis, clipOrigin), normal: normalForAxis(clipAxis) }, keepSide, mode: 'applyVisualClip', cap: true }, source: 'ui', confirmed: true, rawText: `手动应用 ${clipAxis.toUpperCase()}=${clipOrigin} 切割` });
+    setClipPreviewActive(false);
+  };
+
+  const clearClip = () => {
+    if (clipCommitDisabled) return;
+    onExecute({ id: `ui-clip-clear-${Date.now()}`, type: 'clipMesh', target, params: { plane: { origin: [0, 0, 0], normal: [1, 0, 0] }, keepSide: 'positive', mode: 'clearVisualClip', cap: false }, source: 'ui', confirmed: true, rawText: '手动清除切割' });
+    setClipPreviewActive(false);
+  };
 
   return (
     <div className="panel-body stacked">
-      <section className="tool-section">
+      <section className="tool-section" aria-label="旋转">
         <div className="section-title">旋转 <span>{selectedCount || 0} selected</span></div>
-        <label className="field-row">
-          <span>角度</span>
-          <input type="number" value={angle} onChange={(event) => setAngle(Number(event.target.value))} />
-        </label>
-        <div className="button-row">
-          {(['x', 'y', 'z'] as const).map((axis) => (
-            <button key={axis} disabled={disabled} onClick={() => onExecute({ id: `ui-rotate-${Date.now()}`, type: 'rotateMesh', target, params: { axis, angleDeg: angle, pivot: 'boundsCenter', space: 'world' }, source: 'ui' })}>
-              {axis.toUpperCase()} 轴
-            </button>
-          ))}
+        {axisOptions.map((axis) => (
+          <NumberField
+            key={axis}
+            label={`${axis.toUpperCase()} 轴`}
+            value={rotationAngles[axis]}
+            onChange={(value) => updateRotationAngle(axis, value)}
+            incrementLabel={`增加 ${axis.toUpperCase()} 轴角度`}
+            decrementLabel={`减少 ${axis.toUpperCase()} 轴角度`}
+          />
+        ))}
+        <div className="tool-action-row" role="group" aria-label="旋转操作">
+          <button disabled={disabled || axisOptions.every((axis) => rotationAngles[axis] === 0)} className="primary-button" onClick={applyRotation}>应用旋转</button>
         </div>
       </section>
-      <section className="tool-section">
+      <section className="tool-section" aria-label="复制">
         <div className="section-title">复制</div>
-        <label className="field-row">
-          <span>数量</span>
-          <input type="number" min={1} max={12} value={cloneCount} onChange={(event) => setCloneCount(Number(event.target.value))} />
-        </label>
-        <label className="field-row">
-          <span>方向</span>
-          <select value={cloneAxis} onChange={(event) => setCloneAxis(event.target.value as 'x' | 'y' | 'z')}>
-            <option value="x">X</option>
-            <option value="y">Y</option>
-            <option value="z">Z</option>
-          </select>
-        </label>
-        <label className="field-row">
-          <span>间隔</span>
-          <input type="number" value={cloneDistance} onChange={(event) => setCloneDistance(Number(event.target.value))} />
-        </label>
-        <button disabled={disabled} onClick={() => onExecute({ id: `ui-clone-${Date.now()}`, type: 'cloneMesh', target, params: { count: cloneCount, offset: axisVector(cloneAxis, cloneDistance), unit: scene.unit, shareGeometry: true, namePattern: '{name}-copy-{n}' }, source: 'ui' })}>
-          复制对象
-        </button>
-      </section>
-      <section className="tool-section">
-        <div className="section-title">切割预览</div>
-        <label className="field-row">
-          <span>平面</span>
-          <select value={clipAxis} onChange={(event) => setClipAxis(event.target.value as 'x' | 'y' | 'z')}>
-            <option value="x">X</option>
-            <option value="y">Y</option>
-            <option value="z">Z</option>
-          </select>
-        </label>
-        <label className="field-row">
-          <span>坐标</span>
-          <input type="number" value={clipOrigin} onChange={(event) => setClipOrigin(Number(event.target.value))} />
-        </label>
-        <label className="field-row">
-          <span>保留</span>
-          <select value={keepSide} onChange={(event) => setKeepSide(event.target.value as 'positive' | 'negative')}>
-            <option value="positive">正侧</option>
-            <option value="negative">负侧</option>
-          </select>
-        </label>
-        <div className="button-row">
-          <button disabled={disabled} onClick={() => onExecute({ id: `ui-clip-preview-${Date.now()}`, type: 'clipMesh', target, params: { plane: { origin: originForAxis(clipAxis, clipOrigin), normal: normalForAxis(clipAxis) }, keepSide, mode: 'preview', cap: true }, source: 'ui' })}>
-            预览
-          </button>
-          <button disabled={disabled} className="primary-button" onClick={() => onExecute({ id: `ui-clip-apply-${Date.now()}`, type: 'clipMesh', target, params: { plane: { origin: originForAxis(clipAxis, clipOrigin), normal: normalForAxis(clipAxis) }, keepSide, mode: 'applyVisualClip', cap: true }, source: 'ui' })}>
-            应用
+        <NumberField label="数量" min={0} max={12} value={cloneCount} onChange={setCloneCount} incrementLabel="增加数量" decrementLabel="减少数量" />
+        <div className="field-row">
+          <span id="clone-axis-label">方向</span>
+          <div className="segmented-control" role="group" aria-labelledby="clone-axis-label">
+            {axisOptions.map((axis) => (
+              <button key={axis} type="button" className={cloneAxis === axis ? 'active' : ''} aria-pressed={cloneAxis === axis} onClick={() => setCloneAxis(axis)}>
+                {axis.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+        <NumberField label="间隔" min={0} value={cloneDistance} onChange={setCloneDistance} incrementLabel="增加间隔" decrementLabel="减少间隔" />
+        <div className="tool-action-row" role="group" aria-label="复制操作">
+          <button className="primary-button" disabled={cloneDisabled} onClick={() => onExecute({ id: `ui-clone-${Date.now()}`, type: 'cloneMesh', target, params: { count: cloneCount, offset: axisVector(cloneAxis, cloneDistance), unit: scene.unit, shareGeometry: true, namePattern: '{name}-copy-{n}' }, source: 'ui', rawText: `手动复制 ${cloneCount} 个对象，沿 ${cloneAxis.toUpperCase()} 方向间隔 ${cloneDistance}${scene.unit}` })}>
+            复制对象
           </button>
         </div>
-        <button disabled={disabled || !selectedMesh?.clipping} onClick={() => onExecute({ id: `ui-clip-clear-${Date.now()}`, type: 'clipMesh', target, params: { plane: { origin: [0, 0, 0], normal: [1, 0, 0] }, keepSide: 'positive', mode: 'clearVisualClip', cap: false }, source: 'ui', confirmed: true })}>
-          清除切割
-        </button>
+      </section>
+      <section className="tool-section" aria-label="切割预览">
+        <div className="section-title">切割预览</div>
+        <div className="field-row">
+          <span id="clip-axis-label">平面</span>
+          <div className="segmented-control" role="group" aria-labelledby="clip-axis-label">
+            {axisOptions.map((axis) => (
+              <button key={axis} type="button" className={clipAxis === axis ? 'active' : ''} aria-pressed={clipAxis === axis} onClick={() => { setClipAxis(axis); setClipPreviewActive(false); }}>
+                {axis.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+        <NumberField label="坐标" value={clipOrigin} onChange={(value) => { setClipOrigin(value); setClipPreviewActive(false); }} incrementLabel="增加坐标" decrementLabel="减少坐标" />
+        <div className="field-row">
+          <span id="clip-side-label">保留</span>
+          <div className="segmented-control two-options" role="group" aria-labelledby="clip-side-label">
+            <button type="button" className={keepSide === 'positive' ? 'active' : ''} aria-pressed={keepSide === 'positive'} onClick={() => { setKeepSide('positive'); setClipPreviewActive(false); }}>正侧</button>
+            <button type="button" className={keepSide === 'negative' ? 'active' : ''} aria-pressed={keepSide === 'negative'} onClick={() => { setKeepSide('negative'); setClipPreviewActive(false); }}>负侧</button>
+          </div>
+        </div>
+        <div className="tool-action-row clip-action-row" role="group" aria-label="切割操作">
+          {!clipPreviewActive ? (
+            <button disabled={disabled} onClick={previewClip}>
+              预览切割
+            </button>
+          ) : (
+            <>
+              <button className="danger-button" disabled={clipCommitDisabled} onClick={clearClip}>
+                清除切割
+              </button>
+              <button className="primary-button" disabled={clipCommitDisabled} onClick={applyClip}>
+                应用切割
+              </button>
+            </>
+          )}
+        </div>
       </section>
     </div>
   );
+}
+
+function NumberField({ label, value, onChange, min, max, step = 1, incrementLabel, decrementLabel }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; incrementLabel: string; decrementLabel: string }) {
+  const inputId = useId();
+  const [inputValue, setInputValue] = useState(String(value));
+  const commitValue = (nextValue: number) => {
+    const clampedValue = clampNumber(nextValue, min, max);
+    setInputValue(String(clampedValue));
+    onChange(clampedValue);
+  };
+
+  useEffect(() => {
+    setInputValue(String(value));
+  }, [value]);
+
+  const handleInputChange = (nextValue: string) => {
+    setInputValue(nextValue);
+    if (nextValue === '') return;
+    commitValue(Number(nextValue));
+  };
+
+  const handleInputBlur = () => {
+    if (inputValue === '') {
+      commitValue(min ?? 0);
+      return;
+    }
+    commitValue(Number(inputValue));
+  };
+
+  return (
+    <div className="field-row number-field">
+      <label htmlFor={inputId}>{label}</label>
+      <div className="number-stepper-control">
+        <input id={inputId} type="number" min={min} max={max} step={step} value={inputValue} onChange={(event) => handleInputChange(event.target.value)} onBlur={handleInputBlur} />
+        <div className="number-stepper-buttons">
+          <button type="button" aria-label={incrementLabel} onClick={() => commitValue(value + step)}><ChevronUp size={12} aria-hidden="true" /></button>
+          <button type="button" aria-label={decrementLabel} onClick={() => commitValue(value - step)}><ChevronDown size={12} aria-hidden="true" /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function clampNumber(value: number, min?: number, max?: number): number {
+  if (!Number.isFinite(value)) return min ?? 0;
+  if (min !== undefined && value < min) return min;
+  if (max !== undefined && value > max) return max;
+  return value;
 }
 
 function axisVector(axis: 'x' | 'y' | 'z', value: number): [number, number, number] {

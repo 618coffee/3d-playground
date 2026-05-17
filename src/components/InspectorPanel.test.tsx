@@ -1,8 +1,22 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { InspectorPanel } from './InspectorPanel';
-import type { OperationCommand } from '../domain/actions';
+import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import { createInitialScene } from '../domain/scene';
+
+const mesh: MeshEntity = {
+  id: 'fan-1',
+  name: 'turbofan fan',
+  sourceFormat: 'procedural',
+  visible: true,
+  locked: false,
+  selected: true,
+  color: '#4fb3ff',
+  opacity: 1,
+  bounds: [-10, 10, -10, 10, -10, 10],
+  stats: { points: 100, cells: 60, triangles: 60 },
+  transform: { position: [0, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+};
 
 const clipCommand: OperationCommand = {
   id: 'clip-1',
@@ -68,6 +82,159 @@ describe('InspectorPanel', () => {
     expect(screen.getByLabelText('AI 指令输入')).toBeInTheDocument();
     expect(screen.getByText('未选择对象')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /属性/ })).not.toBeInTheDocument();
+  });
+
+  it('renders manual controls with per-axis rotation, segmented clone and clip controls, steppers, and right aligned actions', () => {
+    const scene = createInitialScene([mesh]);
+    const execute = vi.fn();
+    render(
+      <InspectorPanel
+        scene={scene}
+        selectedMesh={mesh}
+        selectedMeshes={[mesh]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onConfirmPending={vi.fn()}
+        onCancelPending={vi.fn()}
+        onExecute={execute}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /手动/ }));
+
+    const rotateSection = screen.getByRole('region', { name: '旋转' });
+    expect(within(rotateSection).getByRole('spinbutton', { name: 'X 轴' })).toBeInTheDocument();
+    expect(within(rotateSection).getByRole('spinbutton', { name: 'Y 轴' })).toBeInTheDocument();
+    expect(within(rotateSection).getByRole('spinbutton', { name: 'Z 轴' })).toHaveValue(0);
+    expect(within(rotateSection).getByRole('button', { name: '增加 X 轴角度' })).toBeInTheDocument();
+    expect(within(rotateSection).getByRole('button', { name: '减少 Z 轴角度' })).toBeInTheDocument();
+    expect(within(rotateSection).getByRole('group', { name: '旋转操作' })).toContainElement(within(rotateSection).getByRole('button', { name: '应用旋转' }));
+
+    fireEvent.change(within(rotateSection).getByRole('spinbutton', { name: 'X 轴' }), { target: { value: '10' } });
+    fireEvent.change(within(rotateSection).getByRole('spinbutton', { name: 'Y 轴' }), { target: { value: '20' } });
+    fireEvent.change(within(rotateSection).getByRole('spinbutton', { name: 'Z 轴' }), { target: { value: '30' } });
+    fireEvent.click(within(rotateSection).getByRole('button', { name: '应用旋转' }));
+
+    expect(execute).toHaveBeenNthCalledWith(1, expect.objectContaining({ type: 'rotateMesh', params: expect.objectContaining({ axis: 'x', angleDeg: 10 }) }));
+    expect(execute).toHaveBeenNthCalledWith(2, expect.objectContaining({ type: 'rotateMesh', params: expect.objectContaining({ axis: 'y', angleDeg: 20 }) }));
+    expect(execute).toHaveBeenNthCalledWith(3, expect.objectContaining({ type: 'rotateMesh', params: expect.objectContaining({ axis: 'z', angleDeg: 30 }) }));
+
+    const cloneSection = screen.getByRole('region', { name: '复制' });
+    expect(within(cloneSection).getByRole('spinbutton', { name: '数量' })).toHaveValue(0);
+    expect(within(cloneSection).getByRole('spinbutton', { name: '间隔' })).toHaveValue(0);
+    expect(within(cloneSection).queryByRole('combobox', { name: '方向' })).not.toBeInTheDocument();
+    expect(within(cloneSection).getByRole('button', { name: 'X' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(cloneSection).getByRole('button', { name: 'Y' })).toBeInTheDocument();
+    expect(within(cloneSection).getByRole('button', { name: 'Z' })).toBeInTheDocument();
+    expect(within(cloneSection).getByRole('button', { name: '增加数量' })).toBeInTheDocument();
+    expect(within(cloneSection).getByRole('button', { name: '减少间隔' })).toBeInTheDocument();
+    const cloneButton = within(cloneSection).getByRole('button', { name: '复制对象' });
+    expect(within(cloneSection).getByRole('group', { name: '复制操作' })).toContainElement(cloneButton);
+
+    const clipSection = screen.getByRole('region', { name: '切割预览' });
+    expect(within(clipSection).queryByRole('combobox', { name: '平面' })).not.toBeInTheDocument();
+    expect(within(clipSection).queryByRole('combobox', { name: '保留' })).not.toBeInTheDocument();
+    expect(within(clipSection).getByRole('group', { name: '平面' })).toContainElement(within(clipSection).getByRole('button', { name: 'X' }));
+    expect(within(clipSection).getByRole('button', { name: '正侧' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(clipSection).getByRole('button', { name: '负侧' })).toBeInTheDocument();
+    const clipActions = within(clipSection).getByRole('group', { name: '切割操作' });
+    expect(clipActions).toContainElement(within(clipSection).getByRole('button', { name: '预览切割' }));
+    expect(within(clipSection).queryByRole('button', { name: '应用切割' })).not.toBeInTheDocument();
+    expect(within(clipSection).queryByRole('button', { name: '清除切割' })).not.toBeInTheDocument();
+    expect(within(clipSection).getByRole('button', { name: '增加坐标' })).toBeInTheDocument();
+  });
+
+  it('allows clearing numeric defaults before typing a new value', () => {
+    const scene = createInitialScene([mesh]);
+    render(
+      <InspectorPanel
+        scene={scene}
+        selectedMesh={mesh}
+        selectedMeshes={[mesh]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onConfirmPending={vi.fn()}
+        onCancelPending={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /手动/ }));
+
+    const cloneSection = screen.getByRole('region', { name: '复制' });
+    const countInput = within(cloneSection).getByRole('spinbutton', { name: '数量' });
+    fireEvent.change(countInput, { target: { value: '' } });
+
+    expect(countInput).toHaveValue(null);
+
+    fireEvent.change(countInput, { target: { value: '1' } });
+
+    expect(countInput).toHaveValue(1);
+  });
+
+  it('disables clone by default and enables manual clip clearing after preview', () => {
+    const scene = createInitialScene([mesh]);
+    const execute = vi.fn((command: OperationCommand): ActionResult => ({
+      actionId: command.id,
+      status: command.type === 'clipMesh' && command.params.mode === 'preview' ? 'preview' : 'applied',
+      message: 'ok',
+      affectedMeshIds: ['fan-1'],
+      requiresConfirmation: false,
+      warnings: [],
+    }));
+    render(
+      <InspectorPanel
+        scene={scene}
+        selectedMesh={mesh}
+        selectedMeshes={[mesh]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onConfirmPending={vi.fn()}
+        onCancelPending={vi.fn()}
+        onExecute={execute}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /手动/ }));
+
+    const cloneSection = screen.getByRole('region', { name: '复制' });
+    const cloneButton = within(cloneSection).getByRole('button', { name: '复制对象' });
+    expect(within(cloneSection).getByRole('spinbutton', { name: '数量' })).toHaveValue(0);
+    expect(within(cloneSection).getByRole('spinbutton', { name: '间隔' })).toHaveValue(0);
+    expect(cloneButton).toHaveClass('primary-button');
+    expect(cloneButton).toBeDisabled();
+
+    fireEvent.change(within(cloneSection).getByRole('spinbutton', { name: '数量' }), { target: { value: '1' } });
+    expect(cloneButton).toBeDisabled();
+
+    fireEvent.change(within(cloneSection).getByRole('spinbutton', { name: '间隔' }), { target: { value: '5' } });
+    expect(cloneButton).toBeEnabled();
+
+    const clipSection = screen.getByRole('region', { name: '切割预览' });
+    expect(within(clipSection).getByRole('button', { name: '预览切割' })).toBeInTheDocument();
+    expect(within(clipSection).queryByRole('button', { name: '清除切割' })).not.toBeInTheDocument();
+    expect(within(clipSection).queryByRole('button', { name: '应用切割' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(clipSection).getByRole('button', { name: '预览切割' }));
+
+    const clearClipButton = within(clipSection).getByRole('button', { name: '清除切割' });
+    const applyClipButton = within(clipSection).getByRole('button', { name: '应用切割' });
+    expect(clearClipButton).toBeEnabled();
+    expect(clearClipButton).toHaveClass('danger-button');
+    expect(applyClipButton).toHaveClass('primary-button');
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ type: 'clipMesh', params: expect.objectContaining({ mode: 'preview' }) }));
+
+    fireEvent.click(applyClipButton);
+
+    expect(execute).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'clipMesh', params: expect.objectContaining({ mode: 'applyVisualClip' }) }));
+    expect(within(clipSection).queryByRole('button', { name: '清除切割' })).not.toBeInTheDocument();
+    expect(within(clipSection).queryByRole('button', { name: '应用切割' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(clipSection).getByRole('button', { name: '预览切割' }));
+
+    fireEvent.click(within(clipSection).getByRole('button', { name: '清除切割' }));
+
+    expect(execute).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'clipMesh', params: expect.objectContaining({ mode: 'clearVisualClip' }) }));
   });
 
   it('does not duplicate agent draft confirmation above the chat', () => {

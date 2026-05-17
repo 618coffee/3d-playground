@@ -98,6 +98,57 @@ describe('App agent draft previews', () => {
     expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).getByText('把当前对象绕 Z 轴旋转 90 度')).toBeInTheDocument();
   });
 
+  it('records manual operation panel rotations in the timeline', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /手动/ }));
+
+    const rotateSection = screen.getByRole('region', { name: '旋转' });
+    fireEvent.change(within(rotateSection).getByRole('spinbutton', { name: 'X 轴' }), { target: { value: '15' } });
+    fireEvent.change(within(rotateSection).getByRole('spinbutton', { name: 'Z 轴' }), { target: { value: '0' } });
+    fireEvent.click(within(rotateSection).getByRole('button', { name: '应用旋转' }));
+
+    await waitFor(() => expect(runtimeMock.runtime.rotateMesh).toHaveBeenCalledWith('fan-stage', 'x', 15));
+    expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).getByText('手动旋转 X 轴 15 度')).toBeInTheDocument();
+  });
+
+  it('keeps manual clip preview inline without a pending confirmation card', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /手动/ }));
+
+    const clipSection = screen.getByRole('region', { name: '切割预览' });
+    expect(within(clipSection).getByRole('button', { name: '预览切割' })).toBeInTheDocument();
+    expect(within(clipSection).queryByRole('button', { name: '清除切割' })).not.toBeInTheDocument();
+    expect(within(clipSection).queryByRole('button', { name: '应用切割' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(clipSection).getByRole('button', { name: '预览切割' }));
+
+    await waitFor(() => expect(runtimeMock.runtime.previewClip).toHaveBeenCalledWith('fan-stage', expect.any(Object)));
+    expect(screen.queryByText('待确认切割')).not.toBeInTheDocument();
+    const clearClipButton = within(clipSection).getByRole('button', { name: '清除切割' });
+    const applyClipButton = within(clipSection).getByRole('button', { name: '应用切割' });
+    expect(clearClipButton).toBeEnabled();
+    expect(applyClipButton).toBeEnabled();
+
+    fireEvent.click(applyClipButton);
+
+    await waitFor(() => expect(runtimeMock.runtime.previewClip).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(within(clipSection).getByRole('button', { name: '预览切割' }));
+    await waitFor(() => expect(runtimeMock.runtime.previewClip).toHaveBeenCalledTimes(3));
+
+    fireEvent.click(within(clipSection).getByRole('button', { name: '清除切割' }));
+
+    await waitFor(() => expect(runtimeMock.runtime.clearClip).toHaveBeenCalledWith('fan-stage'));
+  });
+
   it('uses wider default sidebars', async () => {
     vi.stubGlobal('fetch', vi.fn());
 

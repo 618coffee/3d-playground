@@ -170,6 +170,17 @@ label input[type='file'] {
   background: #1688bc;
 }
 
+.danger-button {
+  background: #49211c;
+  border-color: #8a3d34;
+  color: #ffe8e2;
+}
+
+.danger-button:hover {
+  background: #653028;
+  border-color: #b05245;
+}
+
 .icon-button {
   width: 34px;
   padding: 0;
@@ -1869,10 +1880,98 @@ label input[type='file'] {
   color: #b8c7d8;
 }
 
+.field-row > label,
+.field-row > span {
+  min-width: 0;
+}
+
 .field-row input,
 .field-row select,
 textarea {
   width: 100%;
+}
+
+input[type='number'] {
+  appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.number-stepper-control {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+}
+
+.number-stepper-control input {
+  height: 34px;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.number-stepper-buttons {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+
+.number-stepper-buttons button {
+  width: 28px;
+  min-height: 17px;
+  height: 17px;
+  padding: 0;
+  border-left: 0;
+  border-radius: 0;
+  color: #9fb6ca;
+  background: #131d27;
+}
+
+.number-stepper-buttons button:first-child {
+  border-top-right-radius: 6px;
+}
+
+.number-stepper-buttons button:last-child {
+  border-top: 0;
+  border-bottom-right-radius: 6px;
+}
+
+.segmented-control {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.segmented-control.two-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.segmented-control button {
+  min-width: 0;
+}
+
+.tool-action-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.clip-action-row {
+  align-items: stretch;
+  flex-wrap: nowrap;
+}
+
+.clip-action-row button {
+  min-width: 0;
+  padding-inline: 9px;
+  white-space: nowrap;
 }
 
 .field-row select {
