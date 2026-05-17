@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { ViewerPanel } from './ViewerPanel';
 import type { OperationCommand } from '../domain/actions';
@@ -28,6 +29,8 @@ type GuideSnapshot = {
 type RuntimeStub = VtkRuntime & {
   emitViewportGuideChange: (snapshot: GuideSnapshot) => void;
 };
+
+const appStyles = readFileSync(`${process.cwd()}/src/styles.css`, 'utf8');
 
 const initialGuideSnapshot: GuideSnapshot = {
   viewport: { width: 640, height: 420 },
@@ -83,6 +86,10 @@ function createRuntimeStub(snapshot: GuideSnapshot = initialGuideSnapshot): Runt
     render: vi.fn(),
     loadFile: vi.fn(),
   } as unknown as RuntimeStub;
+}
+
+function readStyles(): string {
+  return appStyles;
 }
 
 describe('ViewerPanel', () => {
@@ -181,20 +188,26 @@ describe('ViewerPanel', () => {
       />,
     );
 
-    fireEvent.mouseEnter(screen.getByRole('group', { name: '视角导航' }));
+    const control = screen.getByRole('group', { name: '视角导航' });
 
     fireEvent.click(screen.getByRole('button', { name: '当前视角：侧视图' }));
+
+    expect(control).toHaveAttribute('data-expanded', 'true');
+
     fireEvent.click(screen.getByRole('button', { name: '切换到等轴测' }));
+    expect(control).toHaveAttribute('data-expanded', 'false');
+
+    fireEvent.mouseEnter(control);
     fireEvent.click(screen.getByRole('button', { name: '切换到正视图' }));
+    fireEvent.mouseEnter(control);
     fireEvent.click(screen.getByRole('button', { name: '切换到俯视图' }));
 
-    expect(onResetView).toHaveBeenNthCalledWith(1, 'right');
-    expect(onResetView).toHaveBeenNthCalledWith(2, 'isometric');
-    expect(onResetView).toHaveBeenNthCalledWith(3, 'front');
-    expect(onResetView).toHaveBeenNthCalledWith(4, 'top');
+    expect(onResetView).toHaveBeenNthCalledWith(1, 'isometric');
+    expect(onResetView).toHaveBeenNthCalledWith(2, 'front');
+    expect(onResetView).toHaveBeenNthCalledWith(3, 'top');
   });
 
-  it('keeps orientation switching only in the collapsible viewport control', () => {
+  it('keeps orientation switching in the compact viewport toolbar selector', () => {
     globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 
     render(
@@ -215,12 +228,13 @@ describe('ViewerPanel', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: '等轴测视图' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '正视图' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '当前视角：侧视图' })).toHaveTextContent('侧视图');
 
+    const toolbar = screen.getByRole('toolbar', { name: '视图区工具' });
     const control = screen.getByRole('group', { name: '视角导航' });
+    expect(toolbar).toContainElement(control);
     expect(control).toHaveAttribute('data-expanded', 'false');
+    expect(control).toHaveClass('orientation-control');
 
     fireEvent.mouseEnter(control);
 
@@ -233,6 +247,69 @@ describe('ViewerPanel', () => {
     fireEvent.mouseLeave(control);
 
     expect(control).toHaveAttribute('data-expanded', 'false');
+  });
+
+  it('keeps grid with navigation tools and switches display mode from a compact selector', () => {
+    globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+    const onDisplayModeChange = vi.fn();
+
+    render(
+      <ViewerPanel
+        runtime={createRuntimeStub()}
+        meshCount={1}
+        visibleCount={1}
+        selectedCount={1}
+        selectedName="Fan"
+        currentOrientation="isometric"
+        viewScale={1}
+        displayMode="wireframe"
+        onDisplayModeChange={onDisplayModeChange}
+        onResetView={vi.fn()}
+        onRotateSelection={vi.fn()}
+        onViewScaleChange={vi.fn()}
+        onDropFile={vi.fn()}
+      />,
+    );
+
+    const toolbar = screen.getByRole('toolbar', { name: '视图区工具' });
+    const displayControl = screen.getByRole('group', { name: '显示模式' });
+    const orientationControl = screen.getByRole('group', { name: '视角导航' });
+    const gridButton = screen.getByRole('button', { name: '隐藏坐标网格' });
+    expect(toolbar).toContainElement(displayControl);
+    expect(gridButton.nextElementSibling).toHaveClass('viewport-toolbar-divider');
+    expect(displayControl.nextElementSibling).toBe(orientationControl);
+    expect(screen.getByRole('button', { name: '当前显示模式：线条显示' })).toHaveTextContent('线条显示');
+    expect(displayControl).toHaveAttribute('data-expanded', 'false');
+    expect(screen.queryByRole('button', { name: '切换到线条显示' })).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(displayControl);
+
+    expect(displayControl).toHaveAttribute('data-expanded', 'true');
+    expect(screen.getByRole('button', { name: '切换到实体显示' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '切换到点显示' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '切换到线条显示' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '切换到实体显示' }));
+
+    expect(onDisplayModeChange).toHaveBeenCalledWith('surface');
+    expect(displayControl).toHaveAttribute('data-expanded', 'false');
+  });
+
+  it('styles the orientation selector as part of the viewport toolbar instead of a top-right island', () => {
+    const styles = readStyles();
+
+    expect(styles).toMatch(/\.viewport-toolbar\s*\{[^}]*align-items:\s*flex-start;/s);
+    expect(styles).toMatch(/\.viewport-toolbar > button\s*\{[^}]*width:\s*34px;/s);
+    expect(styles).not.toMatch(/\.viewport-toolbar button\s*\{[^}]*width:\s*34px;/s);
+    expect(styles).toMatch(/\.display-mode-control\s*\{[^}]*position:\s*relative;/s);
+    expect(styles).toMatch(/\.display-mode-current\s*\{[^}]*height:\s*34px;/s);
+    expect(styles).toMatch(/\.display-mode-current\s*\{[^}]*width:\s*var\(--display-mode-button-width\);/s);
+    expect(styles).toMatch(/\.display-mode-options\s*\{[^}]*top:\s*100%;[^}]*padding-top:\s*var\(--display-mode-gap\);/s);
+    expect(styles).toMatch(/\.orientation-control\s*\{[^}]*position:\s*relative;/s);
+    expect(styles).not.toMatch(/\.orientation-control\s*\{[^}]*right:\s*14px;/s);
+    expect(styles).toMatch(/\.orientation-current\s*\{[^}]*height:\s*34px;/s);
+    expect(styles).toMatch(/\.orientation-current\s*\{[^}]*width:\s*var\(--orientation-button-width\);/s);
+    expect(styles).toMatch(/\.orientation-options\s*\{[^}]*top:\s*100%;[^}]*padding-top:\s*var\(--orientation-gap\);/s);
   });
 
   it('shows scene status chips in the viewport instead of relying on the top bar', () => {

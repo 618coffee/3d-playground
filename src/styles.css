@@ -798,20 +798,130 @@ label input[type='file'] {
   left: 12px;
   z-index: 3;
   display: flex;
+  align-items: flex-start;
   gap: 6px;
 }
 
-.viewport-toolbar button {
+.viewport-toolbar > button {
   width: 34px;
   padding: 0;
   background: rgba(17, 25, 34, 0.88);
   font-weight: 700;
 }
 
-.viewport-toolbar button.active {
+.viewport-toolbar > button.active {
   background: rgba(18, 49, 73, 0.94);
   border-color: #1a89c1;
   color: #f2fbff;
+}
+
+.viewport-toolbar-divider {
+  width: 1px;
+  height: 24px;
+  margin: 5px 2px;
+  background: rgba(49, 67, 85, 0.9);
+}
+
+.display-mode-control {
+  --display-mode-button-width: 82px;
+  --display-mode-button-height: 34px;
+  --display-mode-gap: 6px;
+  position: relative;
+  width: var(--display-mode-button-width);
+  height: var(--display-mode-button-height);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  overflow: visible;
+  z-index: 4;
+  transition: filter var(--motion-drawer-duration) ease;
+}
+
+.display-mode-control[data-expanded='true'] {
+  filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.32));
+}
+
+.display-mode-current {
+  position: relative;
+  width: var(--display-mode-button-width);
+  height: 34px;
+  min-height: 0;
+  padding: 0 10px;
+  border: 1px solid #3b4a5a;
+  border-radius: 5px;
+  background: rgba(17, 25, 34, 0.92);
+  color: #75cfff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  transition:
+    transform var(--motion-drawer-duration) var(--motion-ease),
+    border-color var(--motion-quick-duration) ease,
+    background-color var(--motion-quick-duration) ease,
+    color var(--motion-quick-duration) ease;
+}
+
+.display-mode-current:hover,
+.display-mode-current:focus-visible {
+  border-color: #49a6d8;
+  color: #d7f2ff;
+  background: rgba(24, 49, 66, 0.96);
+}
+
+.display-mode-control[data-expanded='true'] .display-mode-current {
+  border-color: #1a89c1;
+  background: rgba(18, 49, 73, 0.92);
+}
+
+.display-mode-options {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  width: var(--display-mode-button-width);
+  display: grid;
+  gap: var(--display-mode-gap);
+  padding-top: var(--display-mode-gap);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--motion-drawer-duration) ease,
+    transform var(--motion-drawer-duration) var(--motion-ease-compact);
+}
+
+.display-mode-control[data-expanded='true'] .display-mode-options {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.display-mode-option {
+  position: relative;
+  width: 100%;
+  max-width: var(--display-mode-button-width);
+  height: 32px;
+  min-height: 0;
+  padding: 0 10px;
+  border: 1px solid #314355;
+  border-radius: 5px;
+  background: rgba(15, 22, 31, 0.92);
+  color: #a9bacb;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  transition:
+    border-color var(--motion-quick-duration) ease,
+    color var(--motion-quick-duration) ease,
+    background-color var(--motion-quick-duration) ease,
+    transform var(--motion-quick-duration) var(--motion-ease-compact);
+}
+
+.display-mode-option:hover,
+.display-mode-option:focus-visible {
+  border-color: #49a6d8;
+  color: #d7f2ff;
+  background: rgba(24, 49, 66, 0.96);
+  transform: translateY(-1px);
 }
 
 .view-scale-control {
@@ -866,12 +976,10 @@ label input[type='file'] {
 }
 
 .orientation-control {
-  --orientation-button-width: 72px;
-  --orientation-button-height: 48px;
+  --orientation-button-width: 78px;
+  --orientation-button-height: 34px;
   --orientation-gap: 6px;
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  position: relative;
   width: var(--orientation-button-width);
   height: var(--orientation-button-height);
   border: 0;
@@ -886,29 +994,23 @@ label input[type='file'] {
 }
 
 .orientation-control[data-expanded='true'] {
-  width: calc(var(--orientation-button-width) * 2 + var(--orientation-gap));
-  height: calc(var(--orientation-button-height) * 2 + var(--orientation-gap));
-  filter: drop-shadow(0 18px 38px rgba(0, 0, 0, 0.32));
+  filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.32));
 }
 
 .orientation-current {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: relative;
   width: var(--orientation-button-width);
-  height: var(--orientation-button-height);
+  height: 34px;
   min-height: 0;
-  padding: 0;
+  padding: 0 10px;
   border: 1px solid #3b4a5a;
   border-radius: 5px;
   background: rgba(17, 25, 34, 0.92);
   color: #75cfff;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
   transition:
-    width var(--motion-drawer-duration) var(--motion-ease),
-    height var(--motion-drawer-duration) var(--motion-ease),
     transform var(--motion-drawer-duration) var(--motion-ease),
     border-color var(--motion-quick-duration) ease,
     background-color var(--motion-quick-duration) ease,
@@ -929,37 +1031,45 @@ label input[type='file'] {
 
 .orientation-options {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 100%;
+  width: var(--orientation-button-width);
+  display: grid;
+  gap: var(--orientation-gap);
+  padding-top: var(--orientation-gap);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--motion-drawer-duration) ease;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--motion-drawer-duration) ease,
+    transform var(--motion-drawer-duration) var(--motion-ease-compact);
 }
 
 .orientation-control[data-expanded='true'] .orientation-options {
   opacity: 1;
   pointer-events: auto;
+  transform: translateY(0);
 }
 
 .orientation-face {
-  position: absolute;
+  position: relative;
   width: 100%;
   max-width: var(--orientation-button-width);
-  height: var(--orientation-button-height);
+  height: 32px;
   min-height: 0;
-  padding: 0;
+  padding: 0 10px;
   border: 1px solid #314355;
   border-radius: 5px;
   background: rgba(15, 22, 31, 0.92);
   color: #a9bacb;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
-  transform: translate(var(--collapsed-x), var(--collapsed-y)) scale(0.92);
   transition:
     border-color var(--motion-quick-duration) ease,
     color var(--motion-quick-duration) ease,
     background-color var(--motion-quick-duration) ease,
-    transform var(--motion-drawer-duration) var(--motion-ease);
+    transform var(--motion-quick-duration) var(--motion-ease-compact);
 }
 
 .orientation-face:hover,
@@ -967,32 +1077,7 @@ label input[type='file'] {
   border-color: #49a6d8;
   color: #d7f2ff;
   background: rgba(24, 49, 66, 0.96);
-  transform: translate(var(--expanded-x), var(--expanded-y)) translateY(-1px);
-}
-
-.orientation-control[data-expanded='true'] .orientation-face {
-  transform: translate(var(--expanded-x), var(--expanded-y));
-}
-
-.orientation-option-0 {
-  --collapsed-x: calc(var(--orientation-button-width) + var(--orientation-gap));
-  --collapsed-y: 0px;
-  --expanded-x: 0px;
-  --expanded-y: 0px;
-}
-
-.orientation-option-1 {
-  --collapsed-x: calc(var(--orientation-button-width) + var(--orientation-gap));
-  --collapsed-y: 0px;
-  --expanded-x: calc(var(--orientation-button-width) + var(--orientation-gap));
-  --expanded-y: calc(var(--orientation-button-height) + var(--orientation-gap));
-}
-
-.orientation-option-2 {
-  --collapsed-x: calc(var(--orientation-button-width) + var(--orientation-gap));
-  --collapsed-y: 0px;
-  --expanded-x: 0px;
-  --expanded-y: calc(var(--orientation-button-height) + var(--orientation-gap));
+  transform: translateY(-1px);
 }
 
 .axis-triad {

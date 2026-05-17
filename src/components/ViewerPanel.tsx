@@ -1,4 +1,4 @@
-import { BoxSelect, Grid3X3, Layers, Orbit, RotateCcw, ZoomIn } from 'lucide-react';
+import { BoxSelect, Grid3X3, Orbit, RotateCcw, ZoomIn } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DisplayMode, OperationCommand, Vec3 } from '../domain/actions';
 import type { ViewportGuidePoint, ViewportGuideSnapshot, VtkRuntime } from '../viewer/vtkRuntime';
@@ -29,12 +29,19 @@ const ORIENTATION_OPTIONS: Array<{ id: ViewOrientation; label: string; shortLabe
   { id: 'right', label: '侧视图', shortLabel: '侧视图' },
 ];
 
+const DISPLAY_MODE_OPTIONS: Array<{ id: DisplayMode; label: string }> = [
+  { id: 'surface', label: '实体显示' },
+  { id: 'wireframe', label: '线条显示' },
+  { id: 'points', label: '点显示' },
+];
+
 const VIEW_SCALE_PRESETS = [0.2, 0.5, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4];
 
 export function ViewerPanel({ runtime, meshCount, visibleCount, selectedCount, selectedName, currentOrientation, viewScale, displayMode, pendingCommand, onDisplayModeChange, onResetView, onRotateSelection, onViewScaleChange, onDropFile }: ViewerPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rotatePointerRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const [objectRotateEnabled, setObjectRotateEnabled] = useState(false);
+  const [displayModeExpanded, setDisplayModeExpanded] = useState(false);
   const [orientationExpanded, setOrientationExpanded] = useState(false);
   const [worldGridVisible, setWorldGridVisible] = useState(true);
   const [guideSnapshot, setGuideSnapshot] = useState<ViewportGuideSnapshot | null>(() => runtime.getViewportGuides());
@@ -46,6 +53,8 @@ export function ViewerPanel({ runtime, meshCount, visibleCount, selectedCount, s
   const selectValue = isPreset ? String(preset) : String(clampedViewScale);
   const currentOrientationOption = orientationOption(currentOrientation);
   const expandedOrientationOptions = ORIENTATION_OPTIONS.filter((option) => option.id !== currentOrientation);
+  const currentDisplayModeOption = displayModeOption(displayMode);
+  const expandedDisplayModeOptions = DISPLAY_MODE_OPTIONS.filter((option) => option.id !== displayMode);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -88,7 +97,7 @@ export function ViewerPanel({ runtime, meshCount, visibleCount, selectedCount, s
         if (file) onDropFile(file);
       }}
     >
-      <div className="viewport-toolbar">
+      <div className="viewport-toolbar" role="toolbar" aria-label="视图区工具">
         <button title="点击视窗对象或对象树可选择"><BoxSelect size={16} /></button>
         <button
           className={objectRotateEnabled ? 'active' : ''}
@@ -99,9 +108,6 @@ export function ViewerPanel({ runtime, meshCount, visibleCount, selectedCount, s
         >
           <Orbit size={16} />
         </button>
-        <button className={displayMode === 'surface' ? 'active' : ''} title="实体显示" onClick={() => onDisplayModeChange('surface')}><Layers size={16} /></button>
-        <button className={displayMode === 'wireframe' ? 'active' : ''} title="线框显示" onClick={() => onDisplayModeChange('wireframe')}>W</button>
-        <button className={displayMode === 'points' ? 'active' : ''} title="点显示" onClick={() => onDisplayModeChange('points')}>P</button>
         <button
           className={worldGridVisible ? 'active' : ''}
           title={worldGridVisible ? '隐藏坐标网格' : '显示坐标网格'}
@@ -111,6 +117,105 @@ export function ViewerPanel({ runtime, meshCount, visibleCount, selectedCount, s
         >
           <Grid3X3 size={16} />
         </button>
+        <span className="viewport-toolbar-divider" aria-hidden="true" />
+        <div
+          className="display-mode-control"
+          role="group"
+          aria-label="显示模式"
+          data-expanded={displayModeExpanded}
+          onMouseEnter={() => {
+            setDisplayModeExpanded(true);
+            setOrientationExpanded(false);
+          }}
+          onMouseLeave={() => setDisplayModeExpanded(false)}
+          onFocus={() => {
+            setDisplayModeExpanded(true);
+            setOrientationExpanded(false);
+          }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setDisplayModeExpanded(false);
+          }}
+        >
+          <button
+            type="button"
+            className="display-mode-current"
+            title={currentDisplayModeOption.label}
+            aria-label={`当前显示模式：${currentDisplayModeOption.label}`}
+            onClick={() => {
+              setDisplayModeExpanded(true);
+              setOrientationExpanded(false);
+            }}
+          >
+            {currentDisplayModeOption.label}
+          </button>
+          <div className="display-mode-options" aria-hidden={!displayModeExpanded}>
+            {expandedDisplayModeOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className="display-mode-option"
+                title={option.label}
+                aria-label={`切换到${option.label}`}
+                tabIndex={displayModeExpanded ? 0 : -1}
+                onClick={() => {
+                  onDisplayModeChange(option.id);
+                  setDisplayModeExpanded(false);
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div
+          className="orientation-control"
+          role="group"
+          aria-label="视角导航"
+          data-expanded={orientationExpanded}
+          onMouseEnter={() => {
+            setOrientationExpanded(true);
+            setDisplayModeExpanded(false);
+          }}
+          onMouseLeave={() => setOrientationExpanded(false)}
+          onFocus={() => {
+            setOrientationExpanded(true);
+            setDisplayModeExpanded(false);
+          }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setOrientationExpanded(false);
+          }}
+        >
+          <button
+            type="button"
+            className="orientation-current"
+            title={currentOrientationOption.label}
+            aria-label={`当前视角：${currentOrientationOption.label}`}
+            onClick={() => {
+              setOrientationExpanded(true);
+              setDisplayModeExpanded(false);
+            }}
+          >
+            {currentOrientationOption.shortLabel}
+          </button>
+          <div className="orientation-options" aria-hidden={!orientationExpanded}>
+            {expandedOrientationOptions.map((option, optionIndex) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`orientation-face orientation-face-${option.id} orientation-option-${optionIndex}`}
+                title={option.label}
+                aria-label={`切换到${option.label}`}
+                tabIndex={orientationExpanded ? 0 : -1}
+                onClick={() => {
+                  onResetView(option.id);
+                  setOrientationExpanded(false);
+                }}
+              >
+                {option.shortLabel}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       <div ref={containerRef} className="vtk-container" />
       {worldGridVisible ? <WorldGridOverlay guide={guideSnapshot} /> : null}
@@ -176,43 +281,6 @@ export function ViewerPanel({ runtime, meshCount, visibleCount, selectedCount, s
           <RotateCcw size={14} aria-hidden="true" />
         </button>
       </div>
-      <div
-        className="orientation-control"
-        role="group"
-        aria-label="视角导航"
-        data-expanded={orientationExpanded}
-        onMouseEnter={() => setOrientationExpanded(true)}
-        onMouseLeave={() => setOrientationExpanded(false)}
-        onFocus={() => setOrientationExpanded(true)}
-        onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setOrientationExpanded(false);
-        }}
-      >
-        <button
-          type="button"
-          className="orientation-current"
-          title={currentOrientationOption.label}
-          aria-label={`当前视角：${currentOrientationOption.label}`}
-          onClick={() => onResetView(currentOrientation)}
-        >
-          {currentOrientationOption.shortLabel}
-        </button>
-        <div className="orientation-options" aria-hidden={!orientationExpanded}>
-          {expandedOrientationOptions.map((option, optionIndex) => (
-            <button
-              key={option.id}
-              type="button"
-              className={`orientation-face orientation-face-${option.id} orientation-option-${optionIndex}`}
-              title={option.label}
-              aria-label={`切换到${option.label}`}
-              tabIndex={orientationExpanded ? 0 : -1}
-              onClick={() => onResetView(option.id)}
-            >
-              {option.shortLabel}
-            </button>
-          ))}
-        </div>
-      </div>
       <div className="viewport-status">
         <span>{meshCount} 对象</span>
         <span>{visibleCount} 可见</span>
@@ -226,6 +294,10 @@ export function ViewerPanel({ runtime, meshCount, visibleCount, selectedCount, s
 
 function orientationOption(orientation: ViewOrientation): { id: ViewOrientation; label: string; shortLabel: string } {
   return ORIENTATION_OPTIONS.find((option) => option.id === orientation) ?? ORIENTATION_OPTIONS[0];
+}
+
+function displayModeOption(mode: DisplayMode): { id: DisplayMode; label: string } {
+  return DISPLAY_MODE_OPTIONS.find((option) => option.id === mode) ?? DISPLAY_MODE_OPTIONS[0];
 }
 
 function WorldGridOverlay({ guide }: { guide: ViewportGuideSnapshot | null }) {

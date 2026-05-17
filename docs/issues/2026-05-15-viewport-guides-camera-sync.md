@@ -6,12 +6,15 @@
 
 The grid and axes now come from projected vtk world coordinates instead of fixed CSS transforms. The vtk runtime emits viewport guide updates when the active camera changes, during interaction animation, after resize, and after explicit renders. `ViewerPanel` renders those projected points as SVG lines, so the guide layer follows orbit, pan, zoom, and view reset.
 
+The viewport controls were also tightened into compact top-left toolbar groups. Selection, object rotation, and coordinate-grid toggling sit together as utility controls. Display mode and orientation are adjacent compact dropdown-style selectors that match the toolbar button height and visual treatment while keeping the current state readable. The selectors open on hover, focus, or current-button click, and close after an option is chosen.
+
 ### Changed Files
 
 - `src/viewer/vtkRuntime.ts`: added viewport guide snapshots, camera/interactor subscriptions, and world-to-display projection helpers.
 - `src/components/ViewerPanel.tsx`: renders grid, X/Y/Z world axes, and the mini axis triad from runtime projection snapshots.
-- `src/components/ViewerPanel.test.tsx`: added regression coverage for guide geometry updates after runtime camera changes.
-- `src/styles.css`: updated guide styles from fixed CSS transforms to projected SVG lines and labels.
+- `src/components/ViewerPanel.tsx`: places display-mode and orientation switching inside the viewport toolbar as compact current-state selectors, with coordinate-grid toggling grouped beside selection tools.
+- `src/components/ViewerPanel.test.tsx`: added regression coverage for guide geometry updates after runtime camera changes, toolbar placement for orientation switching, display-mode dropdown behavior, and coordinate-grid grouping.
+- `src/styles.css`: updated guide styles from fixed CSS transforms to projected SVG lines and labels, and styled the compact toolbar selectors.
 - `backend/agent-api/src/validation.js`: normalized common string booleans from LLM responses so clone drafts are not rejected when `shareGeometry` arrives as `"true"` or `"false"`.
 - `backend/agent-api/src/validation.test.js`: covered boolean-like string normalization for clone payloads.
 
