@@ -35,7 +35,7 @@ export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEnt
         <button className={tab === 'operations' ? 'active' : ''} onClick={() => setTab('operations')}><SlidersHorizontal size={15} /> 操作</button>
         <button className={tab === 'agent' ? 'active' : ''} onClick={() => setTab('agent')}><Bot size={15} /> AI</button>
       </div>
-      <PendingActionCard command={pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
+      <PendingActionCard command={pendingCommand?.source === 'agent' ? null : pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
       {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} selectedCount={selectedMeshes.length} scene={scene} onExecute={onExecute} /> : null}
       {tab === 'agent' ? <AgentPanel scene={scene} selectedMeshes={selectedMeshes} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onConfirmPending={onConfirmPending} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
     </aside>

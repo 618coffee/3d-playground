@@ -42,7 +42,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
   const fallbackAdapter = useMemo(() => createRuleParserAdapter(), []);
   const adapter = useMemo(() => createAgentAdapter(fallbackAdapter), [fallbackAdapter]);
   const [sessionState, setSessionState] = useState<AgentSessionState>(() => createInitialSessionState(scene, historyEntries));
-  const [text, setText] = useState(examples[0]);
+  const [text, setText] = useState('');
   const [activeResponseMessageId, setActiveResponseMessageId] = useState<string | null>(null);
   const [status, setStatus] = useState<AgentStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -224,7 +224,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     });
     const nextConversation = sessionMessagesToConversation(requestSession.messages);
 
-    setText(input);
+    setText('');
     persistSession(requestSession);
     setActiveResponseMessageId(null);
     setStatus('loading');
@@ -384,11 +384,6 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
       <section className="agent-composer" aria-label="AI composer">
         <div className="agent-context-chips">
           <SelectionPills selectedMeshes={selectedMeshes} />
-          <div className="agent-chip-row chip-row" aria-label="Scene context">
-            <span>Scene</span>
-            <span>{historyEntries.length} history</span>
-            {effectivePendingCommand ? <span>Pending draft</span> : null}
-          </div>
         </div>
         <div className="agent-composer-input-row">
           <textarea

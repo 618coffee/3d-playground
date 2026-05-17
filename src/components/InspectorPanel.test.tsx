@@ -25,6 +25,12 @@ const cloneCommand: OperationCommand = {
   source: 'agent',
 };
 
+const uiClipCommand: OperationCommand = {
+  ...clipCommand,
+  id: 'clip-ui-1',
+  source: 'ui',
+};
+
 describe('InspectorPanel', () => {
   it('keeps the AI chat composer visible when no object is selected', () => {
     render(
@@ -44,7 +50,7 @@ describe('InspectorPanel', () => {
     expect(screen.queryByRole('button', { name: /属性/ })).not.toBeInTheDocument();
   });
 
-  it('uses contextual confirmation labels for pending operations', () => {
+  it('does not duplicate agent draft confirmation above the chat', () => {
     const props = {
       scene: createInitialScene(),
       selectedMeshes: [],
@@ -54,11 +60,27 @@ describe('InspectorPanel', () => {
       onExecute: vi.fn(),
     };
 
-    const { rerender } = render(<InspectorPanel {...props} pendingCommand={clipCommand} />);
+    render(<InspectorPanel {...props} pendingCommand={clipCommand} />);
+
+    expect(screen.queryByText('待确认切割')).not.toBeInTheDocument();
+    expect(screen.queryByText(/预览已经显示在视窗中/)).not.toBeInTheDocument();
+  });
+
+  it('uses contextual confirmation labels for non-agent pending operations', () => {
+    const props = {
+      scene: createInitialScene(),
+      selectedMeshes: [],
+      historyEntries: [],
+      onConfirmPending: vi.fn(),
+      onCancelPending: vi.fn(),
+      onExecute: vi.fn(),
+    };
+
+    const { rerender } = render(<InspectorPanel {...props} pendingCommand={uiClipCommand} />);
 
     expect(screen.getByRole('button', { name: /确认应用/ })).toBeInTheDocument();
 
-    rerender(<InspectorPanel {...props} pendingCommand={cloneCommand} />);
+    rerender(<InspectorPanel {...props} pendingCommand={{ ...cloneCommand, source: 'ui' }} />);
 
     expect(screen.getByRole('button', { name: /确认复制/ })).toBeInTheDocument();
   });

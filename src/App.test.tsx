@@ -83,6 +83,7 @@ describe('App agent draft previews', () => {
     await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
     runtimeMock.runtime.rotateMesh.mockClear();
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '把当前对象绕 Z 轴旋转 90 度' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
 
     const confirmButtons = await screen.findAllByRole('button', { name: /确认应用/ });

@@ -102,6 +102,7 @@ describe('AgentPanel', () => {
     expect(screen.getByRole('option', { name: 'Ask' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Edit' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Agent' })).toBeInTheDocument();
+    expect(screen.getByLabelText('AI 指令输入')).toHaveValue('');
     expect(screen.getByRole('button', { name: '发送指令' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /重试/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /停止/ })).not.toBeInTheDocument();
@@ -227,6 +228,7 @@ describe('AgentPanel', () => {
       supportedActions: expect.arrayContaining(['rotateMesh', 'resetView']),
       safetyRules: expect.any(Array),
     });
+    await waitFor(() => expect(screen.getByLabelText('AI 指令输入')).toHaveValue(''));
   });
 
   it('does not execute action drafts returned while in Ask mode', async () => {
@@ -439,6 +441,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '复制当前对象' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(screen.getByRole('button', { name: '新建聊天' }));
 
@@ -524,6 +527,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '重置视角' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(await screen.findByRole('button', { name: /丢弃草稿/ }));
     expect(cancelPending).toHaveBeenCalledTimes(1);
@@ -645,7 +649,7 @@ describe('AgentPanel', () => {
     expect(screen.getByText('Compressor core shaft')).toBeInTheDocument();
   });
 
-  it('shows context chips for selection, history, and pending draft', () => {
+  it('shows only selection context above the composer input', () => {
     const mesh = createMesh('fan-stage', 'Blue titanium fan stage', true);
     const scene = createInitialScene([mesh]);
     const historyEntry = {
@@ -669,9 +673,9 @@ describe('AgentPanel', () => {
     const composer = screen.getByRole('region', { name: 'AI composer' });
 
     expect(within(composer).getByText('Blue titanium fan stage')).toBeInTheDocument();
-    expect(within(composer).getByText('Scene')).toBeInTheDocument();
-    expect(within(composer).getByText('1 history')).toBeInTheDocument();
-    expect(within(composer).getByText('Pending draft')).toBeInTheDocument();
+    expect(within(composer).queryByText('Scene')).not.toBeInTheDocument();
+    expect(within(composer).queryByText('1 history')).not.toBeInTheDocument();
+    expect(within(composer).queryByText('Pending draft')).not.toBeInTheDocument();
   });
 
   it('lets users discard an action draft without executing it', async () => {
@@ -688,6 +692,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '重置视角' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
 
     expect(await screen.findByRole('button', { name: /丢弃草稿/ })).toBeInTheDocument();
@@ -716,6 +721,7 @@ describe('AgentPanel', () => {
 
     render(<AgentPanel {...props} />);
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '解释当前场景' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(await screen.findByRole('button', { name: /丢弃草稿/ }));
 
@@ -739,6 +745,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '复制当前对象' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
 
     await screen.findByRole('button', { name: /确认执行/ });
@@ -760,6 +767,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '重置视角' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
 
     const feed = screen.getByLabelText('AI conversation feed');
@@ -788,6 +796,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '复制当前对象' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
 
     await screen.findByRole('button', { name: /确认执行/ });
@@ -830,6 +839,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '重置视角' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     expect(await screen.findByRole('button', { name: /确认执行/ })).toBeInTheDocument();
 
@@ -869,6 +879,7 @@ describe('AgentPanel', () => {
     );
 
     fireEvent.change(screen.getByLabelText('AI mode'), { target: { value: 'agent' } });
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '规划两步操作' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(await screen.findByRole('button', { name: /逐步执行/ }));
 
@@ -917,6 +928,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '复制当前对象' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(await screen.findByRole('button', { name: /确认应用/ }));
 
@@ -938,6 +950,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '复制当前对象' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     expect(await screen.findByRole('button', { name: /确认应用/ })).toBeInTheDocument();
 
@@ -976,6 +989,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '重置视角' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(await screen.findByRole('button', { name: /确认执行/ }));
 
@@ -1008,6 +1022,7 @@ describe('AgentPanel', () => {
     );
 
     const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.change(input, { target: { value: '解释当前场景' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
 
     expect(input).not.toBeDisabled();
@@ -1043,6 +1058,7 @@ describe('AgentPanel', () => {
     );
 
     const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.change(input, { target: { value: '解释当前场景' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.change(input, { target: { value: '' } });
 
@@ -1075,6 +1091,7 @@ describe('AgentPanel', () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '解释当前场景' } });
     fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
     fireEvent.click(screen.getByRole('button', { name: '停止生成' }));
     resolveResponse(new Response(JSON.stringify(actionDraft), { status: 200 }));
