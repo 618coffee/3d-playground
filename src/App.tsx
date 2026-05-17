@@ -2,7 +2,7 @@ import { type CSSProperties, type MouseEvent as ReactMouseEvent, useCallback, us
 import { TopBar } from './components/TopBar';
 import { ObjectTree } from './components/ObjectTree';
 import { ViewerPanel } from './components/ViewerPanel';
-import { InspectorPanel } from './components/InspectorPanel';
+import { InspectorPanel, PropertiesPanel } from './components/InspectorPanel';
 import { HistoryTimeline } from './components/HistoryTimeline';
 import type { ActionResult, DisplayMode, OperationCommand } from './domain/actions';
 import { createOperationExecutor } from './domain/executor';
@@ -32,10 +32,13 @@ export default function App() {
   const [historyVersion, setHistoryVersion] = useState(0);
   const [workspaceId, setWorkspaceId] = useState<SampleWorkspaceId>('turbofan');
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>({ left: true, right: true, bottom: true });
-  const [panelSizes, setPanelSizes] = useState<PanelSizes>({ left: 260, right: 330, bottom: 156 });
+  const [panelSizes, setPanelSizes] = useState<PanelSizes>({ left: 360, right: 360, bottom: 156 });
+  const [leftPropertiesOpen, setLeftPropertiesOpen] = useState(true);
+  const [leftPropertiesHeight, setLeftPropertiesHeight] = useState<number | null>(null);
   const [viewOrientation, setViewOrientation] = useState<ViewOrientation>('isometric');
   const [viewScale, setViewScaleState] = useState(1);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const leftPropertiesRef = useRef<HTMLElement | null>(null);
   const historyRef = useRef<HistoryStore>(createHistoryStore(emptyScene));
   const datasetsRef = useRef(new Map<string, unknown>());
 
@@ -193,6 +196,25 @@ export default function App() {
     window.addEventListener('mouseup', handleUp, { once: true });
   }, [panelSizes, panelVisibility]);
 
+  const startLeftPropertiesResize = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const fallbackHeight = defaultLeftPropertiesHeight(shellRef.current);
+    const startHeight = leftPropertiesRef.current?.getBoundingClientRect().height || leftPropertiesHeight || fallbackHeight;
+    const handleMove = (moveEvent: MouseEvent) => {
+      const delta = startY - moveEvent.clientY;
+      setLeftPropertiesHeight(clampLeftPropertiesHeight(startHeight + delta, shellRef.current));
+    };
+    const handleUp = () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      document.body.classList.remove('is-resizing-panel');
+    };
+    document.body.classList.add('is-resizing-panel');
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp, { once: true });
+  }, [leftPropertiesHeight]);
+
   const resetView = useCallback(() => {
     execute({
       id: `reset-${Date.now()}`,
@@ -262,7 +284,7 @@ export default function App() {
     <div
       ref={shellRef}
       className={`app-shell ${panelVisibility.bottom ? '' : 'bottom-panel-hidden'}`}
-      style={layoutStyle(panelSizes, panelVisibility)}
+      style={layoutStyle(panelSizes, panelVisibility, leftPropertiesHeight)}
     >
       <TopBar
         canUndo={historyRef.current.canUndo()}
@@ -280,15 +302,31 @@ export default function App() {
       />
       <div className={`workbench-grid ${panelVisibility.left ? '' : 'left-panel-hidden'} ${panelVisibility.right ? '' : 'right-panel-hidden'}`}>
         {panelVisibility.left ? (
-          <div className="panel-slot left-panel-slot">
-            <ObjectTree
-              meshes={scene.meshes}
-              selection={scene.selection}
-              onSelect={selectMeshes}
-              onToggleVisibility={toggleVisibility}
-              onToggleLock={toggleLock}
-              onHidePanel={() => togglePanel('left')}
-            />
+          <div className={`panel-slot left-panel-slot left-panel-stack ${leftPropertiesOpen ? 'properties-open' : 'properties-collapsed'}`}>
+            <div className="left-object-tree-pane">
+              <ObjectTree
+                meshes={scene.meshes}
+                selection={scene.selection}
+                onSelect={selectMeshes}
+                onToggleVisibility={toggleVisibility}
+                onToggleLock={toggleLock}
+                onHidePanel={() => togglePanel('left')}
+              />
+            </div>
+            <section ref={leftPropertiesRef} className="left-properties-pane" aria-label="属性面板">
+              {leftPropertiesOpen ? <div className="panel-resize-handle resize-handle-top left-properties-resize" role="separator" aria-label="调整属性面板高度" aria-orientation="horizontal" title="调整属性面板高度" onMouseDown={startLeftPropertiesResize} /> : null}
+              <div className="left-properties-header">
+                <strong>属性</strong>
+                <button type="button" className="text-button" aria-expanded={leftPropertiesOpen} aria-label={leftPropertiesOpen ? '折叠属性面板' : '展开属性面板'} onClick={() => setLeftPropertiesOpen((open) => !open)}>
+                  {leftPropertiesOpen ? '折叠' : '展开'}
+                </button>
+              </div>
+              {leftPropertiesOpen ? (
+                <div className="left-properties-content" role="region" aria-label="选中对象属性">
+                  <PropertiesPanel mesh={selectedMesh} selectedMeshes={selectedMeshes} />
+                </div>
+              ) : null}
+            </section>
             <div className="panel-resize-handle resize-handle-right" role="separator" aria-orientation="vertical" title="调整对象树宽度" onMouseDown={(event) => startPanelResize('left', event)} />
           </div>
         ) : null}
@@ -358,7 +396,7 @@ function PanelRestoreControls({ visibility, onTogglePanel }: { visibility: Panel
   );
 }
 
-function layoutStyle(sizes: PanelSizes, visibility: PanelVisibility): CSSProperties {
+function layoutStyle(sizes: PanelSizes, visibility: PanelVisibility, leftPropertiesHeight: number | null): CSSProperties {
   const columns = [visibility.left ? `${sizes.left}px` : null, 'minmax(520px, 1fr)', visibility.right ? `${sizes.right}px` : null]
     .filter(Boolean)
     .join(' ');
@@ -366,8 +404,22 @@ function layoutStyle(sizes: PanelSizes, visibility: PanelVisibility): CSSPropert
     '--left-panel-width': `${sizes.left}px`,
     '--right-panel-width': `${sizes.right}px`,
     '--bottom-panel-height': `${sizes.bottom}px`,
+    '--left-properties-height': leftPropertiesHeight === null ? '50%' : `${leftPropertiesHeight}px`,
     '--workbench-columns': columns,
   } as CSSProperties;
+}
+
+function defaultLeftPropertiesHeight(shell: HTMLDivElement | null): number {
+  return Math.round(workbenchHeight(shell) / 2);
+}
+
+function clampLeftPropertiesHeight(value: number, shell: HTMLDivElement | null): number {
+  const max = Math.max(140, workbenchHeight(shell) - 140);
+  return clamp(value, 120, max);
+}
+
+function workbenchHeight(shell: HTMLDivElement | null): number {
+  return Math.max(280, (shell?.clientHeight || window.innerHeight) - 52);
 }
 
 function clampPanelSizes(next: PanelSizes, visibility: PanelVisibility, shell: HTMLDivElement | null): PanelSizes {

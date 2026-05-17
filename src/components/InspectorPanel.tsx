@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Bot, Boxes, Check, PanelRightClose, SlidersHorizontal, X } from 'lucide-react';
+import { Bot, Check, PanelRightClose, SlidersHorizontal, X } from 'lucide-react';
 import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import type { HistoryEntry } from '../domain/history';
 import type { SceneState } from '../domain/scene';
@@ -19,7 +19,7 @@ type InspectorPanelProps = {
 };
 
 export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEntries, pendingCommand, onConfirmPending, onCancelPending, onExecute, onPreviewDraft, onHidePanel }: InspectorPanelProps) {
-  const [tab, setTab] = useState<'properties' | 'operations' | 'agent'>('agent');
+  const [tab, setTab] = useState<'operations' | 'agent'>('agent');
 
   return (
     <aside className="right-panel panel-shell">
@@ -31,13 +31,11 @@ export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEnt
           </button>
         ) : null}
       </div>
-      <div className="tabs">
-        <button className={tab === 'properties' ? 'active' : ''} onClick={() => setTab('properties')}><Boxes size={15} /> 属性</button>
+      <div className="tabs two-tabs">
         <button className={tab === 'operations' ? 'active' : ''} onClick={() => setTab('operations')}><SlidersHorizontal size={15} /> 操作</button>
         <button className={tab === 'agent' ? 'active' : ''} onClick={() => setTab('agent')}><Bot size={15} /> AI</button>
       </div>
       <PendingActionCard command={pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
-      {tab === 'properties' ? <PropertiesTab mesh={selectedMesh} selectedMeshes={selectedMeshes} /> : null}
       {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} selectedCount={selectedMeshes.length} scene={scene} onExecute={onExecute} /> : null}
       {tab === 'agent' ? <AgentPanel scene={scene} selectedMeshes={selectedMeshes} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onConfirmPending={onConfirmPending} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
     </aside>
@@ -61,7 +59,7 @@ function PendingActionCard({ command, onConfirm, onCancel }: { command: Operatio
   );
 }
 
-function PropertiesTab({ mesh, selectedMeshes }: { mesh?: MeshEntity; selectedMeshes: MeshEntity[] }) {
+export function PropertiesPanel({ mesh, selectedMeshes }: { mesh?: MeshEntity; selectedMeshes: MeshEntity[] }) {
   if (!mesh) {
     return <div className="empty-panel roomy">请选择对象，或从对象树里点选一个 mesh。</div>;
   }

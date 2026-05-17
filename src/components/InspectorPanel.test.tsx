@@ -41,6 +41,7 @@ describe('InspectorPanel', () => {
 
     expect(screen.getByLabelText('AI 指令输入')).toBeInTheDocument();
     expect(screen.getByText('未选择对象')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /属性/ })).not.toBeInTheDocument();
   });
 
   it('uses contextual confirmation labels for pending operations', () => {

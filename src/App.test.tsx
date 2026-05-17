@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import type { AgentResponse } from './domain/protocol';
@@ -90,5 +90,44 @@ describe('App agent draft previews', () => {
 
     await waitFor(() => expect(runtimeMock.runtime.rotateMesh).toHaveBeenCalledTimes(2));
     expect(runtimeMock.runtime.rotateMesh).toHaveBeenLastCalledWith('fan-stage', 'z', 90);
+  });
+
+  it('uses wider default sidebars', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+    const shell = document.querySelector('.app-shell') as HTMLElement;
+
+    expect(shell.style.getPropertyValue('--workbench-columns')).toBe('360px minmax(520px, 1fr) 360px');
+    expect(shell.style.getPropertyValue('--left-panel-width')).toBe('360px');
+    expect(shell.style.getPropertyValue('--right-panel-width')).toBe('360px');
+  });
+
+  it('shows selected object properties in a collapsible resizable left stack', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+    const shell = document.querySelector('.app-shell') as HTMLElement;
+    const stack = screen.getByRole('region', { name: '选中对象属性' });
+
+    expect(shell.style.getPropertyValue('--left-properties-height')).toBe('50%');
+    expect(within(stack).getByText('Blue titanium fan stage')).toBeInTheDocument();
+    const resizeHandle = screen.getByRole('separator', { name: '调整属性面板高度' });
+
+    fireEvent.mouseDown(resizeHandle, { clientY: 300 });
+    fireEvent.mouseMove(window, { clientY: 240 });
+    fireEvent.mouseUp(window);
+
+    expect(shell.style.getPropertyValue('--left-properties-height')).toMatch(/px$/);
+    expect(shell.style.getPropertyValue('--left-properties-height')).not.toBe('50%');
+
+    fireEvent.click(screen.getByRole('button', { name: '折叠属性面板' }));
+
+    expect(screen.queryByRole('region', { name: '选中对象属性' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '展开属性面板' })).toBeInTheDocument();
   });
 });
