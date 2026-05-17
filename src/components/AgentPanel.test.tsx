@@ -99,6 +99,8 @@ describe('AgentPanel', () => {
 
     expect(screen.getByLabelText('模型 router')).toHaveValue('default-router');
     expect(screen.getByLabelText('AI mode')).toHaveValue('edit');
+    expect(screen.getByRole('option', { name: 'GPT-5.3' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Default router' })).not.toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Ask' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Edit' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Agent' })).toBeInTheDocument();
@@ -159,6 +161,8 @@ describe('AgentPanel', () => {
     expect(controls).toContainElement(mode);
     expect(controls).toContainElement(router);
     expect(controls).toContainElement(sendButton);
+    expect(mode).toHaveClass('agent-compact-select');
+    expect(router).toHaveClass('agent-compact-select');
     expect(input.compareDocumentPosition(controls as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -182,6 +186,7 @@ describe('AgentPanel', () => {
     expect(screen.queryByRole('button', { name: '复制选中对象 3 个，沿 X 方向间隔 20mm' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '沿 X=0 平面切开当前对象，只保留右半边' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '重置视角' })).not.toBeInTheDocument();
+    expect(screen.queryByText('准备审阅操作草稿。')).not.toBeInTheDocument();
     expect(composer).toHaveClass('agent-composer');
     expect(composer).toContainElement(screen.getByLabelText('AI 指令输入'));
   });
@@ -446,7 +451,8 @@ describe('AgentPanel', () => {
 
     expect(previewDraft).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /确认执行/ })).not.toBeInTheDocument();
-    expect(screen.getByText('准备审阅操作草稿。')).toBeInTheDocument();
+    expect(screen.queryByText('准备审阅操作草稿。')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'AI conversation feed' })).toBeEmptyDOMElement();
   });
 
   it('cancels a pending viewer preview when switching to a new chat', async () => {

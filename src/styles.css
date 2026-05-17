@@ -1495,19 +1495,29 @@ label input[type='file'] {
 }
 
 .agent-composer-controls {
+  --agent-control-select-width: 80px;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   display: grid;
-  grid-template-columns: minmax(84px, auto) minmax(0, 1fr) 34px;
+  grid-template-columns: repeat(2, var(--agent-control-select-width)) minmax(0, 1fr) 34px;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
 }
 
 .agent-composer-controls select {
+  width: var(--agent-control-select-width);
   min-width: 0;
   height: 30px;
-  padding-top: 0;
-  padding-bottom: 0;
+  padding: 0 10px;
   font-size: 12px;
+}
+
+.agent-compact-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
 }
 
 .agent-prompt-footer {
@@ -1516,6 +1526,8 @@ label input[type='file'] {
 }
 
 .agent-send-button {
+  grid-column: 4;
+  justify-self: end;
   width: 28px;
   min-height: 28px;
   height: 28px;

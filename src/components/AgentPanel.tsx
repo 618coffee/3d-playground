@@ -381,13 +381,13 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
           />
         </div>
         <div className="agent-composer-controls" aria-label="AI request controls">
-          <select aria-label="AI mode" value={activeSession.mode} onChange={(event) => updateActiveSession({ mode: event.target.value as AgentMode })}>
+          <select className="agent-compact-select" aria-label="AI mode" value={activeSession.mode} onChange={(event) => updateActiveSession({ mode: event.target.value as AgentMode })}>
             <option value="ask">Ask</option>
             <option value="edit">Edit</option>
             <option value="agent">Agent</option>
           </select>
-          <select aria-label="模型 router" value={activeSession.modelRouterId} onChange={(event) => updateActiveSession({ modelRouterId: event.target.value as ModelRouterId })}>
-            <option value="default-router">Default router</option>
+          <select className="agent-compact-select" aria-label="模型 router" value={activeSession.modelRouterId} onChange={(event) => updateActiveSession({ modelRouterId: event.target.value as ModelRouterId })}>
+            <option value="default-router">GPT-5.3</option>
           </select>
           <button
             type="button"
@@ -459,12 +459,7 @@ function ConversationFeed({
 }) {
   if (messages.length === 0 && !loading) {
     return (
-      <section className="agent-conversation-feed" aria-label="AI conversation feed">
-        <div className="agent-message assistant">
-          <span className="agent-message-role">Agent</span>
-          <p>准备审阅操作草稿。</p>
-        </div>
-      </section>
+      <section className="agent-conversation-feed" aria-label="AI conversation feed" />
     );
   }
 
