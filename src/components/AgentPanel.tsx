@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Check, ChevronDown, ChevronRight, History, Play, Plus, Sparkles, Square, X } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, ChevronRight, History, Play, Plus, Sparkles, Square, Trash2, X } from 'lucide-react';
 import { buildAgentContext } from '../agent/context';
 import { createLlmAgentClient, createRuleParserAdapter } from '../agent/adapters';
 import {
@@ -140,6 +140,34 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     setPlanStatuses({});
     setHistoryOpen(false);
     setStatus('idle');
+  };
+
+  const deleteSession = (sessionId: string) => {
+    const currentState = sessionStateRef.current;
+    const deletingActiveSession = sessionId === currentState.activeSessionId;
+    let nextSessions = currentState.sessions.filter((session) => session.id !== sessionId);
+
+    if (nextSessions.length === 0) {
+      nextSessions = [createAgentChatSession(summarizeSessionContext(scene, historyEntries))];
+    }
+
+    if (deletingActiveSession) {
+      invalidateInFlightRequest();
+      cancelPendingPreview();
+    }
+
+    replaceSessionState({
+      sessions: nextSessions,
+      activeSessionId: deletingActiveSession ? nextSessions[0].id : currentState.activeSessionId,
+    });
+
+    if (deletingActiveSession) {
+      setActiveResponseMessageId(null);
+      setError(null);
+      setDebugOpen(false);
+      setPlanStatuses({});
+      setStatus('idle');
+    }
   };
 
   useEffect(() => {
@@ -295,7 +323,6 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
       <div className="agent-session-header" aria-label="Current chat session">
         <div>
           <strong>{activeSession.title}</strong>
-          <span className="agent-mode-chip">{statusLabel(status)}</span>
         </div>
         <div className="button-row no-wrap">
           <button type="button" className="icon-button" aria-label="新建聊天" title="新建聊天" onClick={createNewSession}>
@@ -310,9 +337,14 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
       {historyOpen ? (
         <section className="agent-session-picker" aria-label="历史会话列表">
           {sessionState.sessions.map((session) => (
-            <button key={session.id} type="button" className={session.id === activeSession.id ? 'active' : ''} onClick={() => openSession(session.id)}>
-              {session.title}
-            </button>
+            <div key={session.id} className="agent-session-row">
+              <button type="button" className={session.id === activeSession.id ? 'active' : ''} onClick={() => openSession(session.id)}>
+                {session.title}
+              </button>
+              <button type="button" className="icon-button" aria-label={`删除 ${session.title}`} title="删除聊天" onClick={() => deleteSession(session.id)}>
+                <Trash2 size={14} aria-hidden="true" />
+              </button>
+            </div>
           ))}
         </section>
       ) : null}
@@ -328,6 +360,8 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
       <ConversationFeed
         messages={activeSession.messages}
         loading={status === 'loading'}
+        sceneMeshes={scene.meshes}
+        selectedMeshes={selectedMeshes}
         activeResponseMessageId={activeResponseMessageId}
         debugOpen={debugOpen}
         planStatuses={planStatuses}
@@ -419,6 +453,8 @@ const noopExecutePlan = (_steps: AgentPlanStep[]) => undefined;
 function ConversationFeed({
   messages,
   loading,
+  sceneMeshes,
+  selectedMeshes,
   activeResponseMessageId,
   debugOpen,
   planStatuses,
@@ -431,6 +467,8 @@ function ConversationFeed({
 }: {
   messages: AgentChatMessage[];
   loading: boolean;
+  sceneMeshes: MeshEntity[];
+  selectedMeshes: MeshEntity[];
   activeResponseMessageId: string | null;
   debugOpen: boolean;
   planStatuses: Record<string, PlanStepStatus>;
@@ -445,7 +483,7 @@ function ConversationFeed({
     return (
       <section className="agent-conversation-feed" aria-label="AI conversation feed">
         <div className="agent-message assistant">
-          <span className="agent-message-role">Assistant</span>
+          <span className="agent-message-role">Agent</span>
           <p>准备审阅操作草稿。</p>
         </div>
       </section>
@@ -457,16 +495,21 @@ function ConversationFeed({
       {messages.map((message) => {
         const displayRole = message.role === 'status' || message.role === 'tool' ? 'tool' : message.role;
         const responseReadOnly = message.id !== activeResponseMessageId;
+        const messageLabel = message.role === 'user' ? 'You' : message.role === 'assistant' ? 'Agent' : 'Status';
 
         return (
         <div key={message.id} className={`agent-message ${displayRole}`}>
-          <span className="agent-message-role">{message.role === 'user' ? 'You' : message.role === 'assistant' ? 'Assistant' : 'Status'}</span>
+          <span className="agent-message-role">{messageLabel}</span>
           <div className="agent-message-body">
-            <p>{message.text}</p>
-            {message.response ? (
+            <div className={message.role === 'user' ? 'agent-chat-pill' : undefined}>
+              <p>{message.text}</p>
+            </div>
+            {message.response && message.response.kind !== 'message' ? (
               <div className="agent-inline-response-card">
                 <AgentResponseView
                   response={message.response}
+                  sceneMeshes={sceneMeshes}
+                  selectedMeshes={selectedMeshes}
                   readOnly={responseReadOnly}
                   debugOpen={!responseReadOnly && debugOpen}
                   planStatuses={responseReadOnly ? {} : planStatuses}
@@ -495,6 +538,8 @@ function ConversationFeed({
 
 function AgentResponseView({
   response,
+  sceneMeshes,
+  selectedMeshes,
   readOnly = false,
   debugOpen,
   planStatuses,
@@ -506,6 +551,8 @@ function AgentResponseView({
   pendingCommand,
 }: {
   response: AgentResponse | null;
+  sceneMeshes: MeshEntity[];
+  selectedMeshes: MeshEntity[];
   readOnly?: boolean;
   debugOpen: boolean;
   planStatuses: Record<string, PlanStepStatus>;
@@ -521,15 +568,7 @@ function AgentResponseView({
   }
 
   if (response.kind === 'message') {
-    return (
-      <section className="agent-review-card parse-card">
-        <div className="agent-review-head">
-          <span className="review-kicker">消息</span>
-          <strong>AI 回复</strong>
-        </div>
-        <p>{response.text}</p>
-      </section>
-    );
+    return null;
   }
 
   if (response.kind === 'clarification') {
@@ -666,7 +705,7 @@ function AgentResponseView({
     );
   }
 
-  const summaryRows = buildActionSummary(response.action);
+  const summaryRows = buildActionSummary(response.action, sceneMeshes, selectedMeshes);
   const pendingMatchesDraft = pendingCommand?.source === 'agent' && pendingCommand.id === response.action.id;
 
   return (
@@ -758,17 +797,6 @@ function sessionMessagesToConversation(messages: AgentChatMessage[]): AgentConve
   }));
 }
 
-function statusLabel(status: AgentStatus): string {
-  const labels: Record<AgentStatus, string> = {
-    idle: 'Idle',
-    loading: 'Generating',
-    ready: 'Ready',
-    error: 'Error',
-    cancelled: 'Cancelled',
-  };
-  return labels[status];
-}
-
 function createId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -816,10 +844,9 @@ function commandTitle(command: OperationCommand) {
   return titles[command.type];
 }
 
-function buildActionSummary(command: OperationCommand): Array<[string, string]> {
+function buildActionSummary(command: OperationCommand, sceneMeshes: MeshEntity[], selectedMeshes: MeshEntity[]): Array<[string, string]> {
   const rows: Array<[string, string]> = [
-    ['操作', command.type],
-    ['目标', describeTarget(command.target)],
+    ['目标', describeTarget(command.target, sceneMeshes, selectedMeshes)],
   ];
 
   if (command.type === 'rotateMesh') rows.push(['参数', `${axisLabel(command.params.axis)} 轴 ${command.params.angleDeg}°`]);
@@ -835,12 +862,29 @@ function buildActionSummary(command: OperationCommand): Array<[string, string]> 
   return rows;
 }
 
-function describeTarget(target: OperationCommand['target']) {
-  if ('source' in target) return target.source === 'selection' ? '当前选择' : '全部可见对象';
-  if ('meshId' in target) return target.meshId;
-  if ('meshIds' in target) return `${target.meshIds.length} 个对象`;
+function describeTarget(target: OperationCommand['target'], sceneMeshes: MeshEntity[], selectedMeshes: MeshEntity[]) {
+  if ('source' in target) {
+    if (target.source === 'selection') return describeMeshes(selectedMeshes.length > 0 ? selectedMeshes : sceneMeshes.filter((mesh) => mesh.selected));
+    return '全部可见对象';
+  }
+  if ('meshId' in target) return meshLabel(sceneMeshes.find((mesh) => mesh.id === target.meshId)) ?? target.meshId;
+  if ('meshIds' in target) return describeMeshes(target.meshIds.map((meshId) => sceneMeshes.find((mesh) => mesh.id === meshId)).filter(isMeshEntity));
   if ('name' in target) return `${target.name} (${target.match})`;
   return target.scope;
+}
+
+function describeMeshes(meshes: MeshEntity[]): string {
+  if (meshes.length === 0) return '当前选择';
+  if (meshes.length <= 2) return meshes.map((mesh) => meshLabel(mesh)).join('、');
+  return `${meshes.slice(0, 2).map((mesh) => meshLabel(mesh)).join('、')} 等 ${meshes.length} 个对象`;
+}
+
+function meshLabel(mesh: MeshEntity | undefined): string | undefined {
+  return mesh?.name || mesh?.id;
+}
+
+function isMeshEntity(mesh: MeshEntity | undefined): mesh is MeshEntity {
+  return Boolean(mesh);
 }
 
 function axisLabel(axis: OperationCommand extends infer Command ? Command extends { type: 'rotateMesh'; params: { axis: infer Axis } } ? Axis : never : never): string {

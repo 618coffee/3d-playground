@@ -1148,13 +1148,34 @@ label input[type='file'] {
   gap: 6px;
 }
 
-.agent-session-picker button {
+.agent-session-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 6px;
+  align-items: center;
+}
+
+.agent-session-picker button:not(.icon-button) {
   width: 100%;
   justify-content: flex-start;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.agent-session-row .icon-button {
+  width: 32px;
+  min-height: 30px;
+  height: 30px;
+  color: #9fb0c1;
+}
+
+.agent-session-row .icon-button:hover {
+  color: #ffd2d2;
+  border-color: #73404a;
+  background: #251820;
 }
 
 .agent-starter-prompts {
@@ -1179,7 +1200,6 @@ label input[type='file'] {
   gap: 10px;
 }
 
-.agent-mode-chip,
 .confidence-pill,
 .review-kicker {
   border: 1px solid #334559;
@@ -1190,12 +1210,6 @@ label input[type='file'] {
   font-weight: 600;
   line-height: 1;
   padding: 5px 8px;
-}
-
-.agent-mode-chip {
-  color: #9fd7c3;
-  border-color: #2f5b4d;
-  background: #10211d;
 }
 
 .agent-selection-pills {
@@ -1370,11 +1384,15 @@ label input[type='file'] {
 }
 
 .agent-message {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: stretch;
   padding: 8px 0;
+}
+
+.agent-message.user {
+  align-items: flex-end;
 }
 
 .agent-message + .agent-message {
@@ -1388,6 +1406,10 @@ label input[type='file'] {
   text-transform: uppercase;
 }
 
+.agent-message.user .agent-message-role {
+  padding-right: 4px;
+}
+
 .agent-message p {
   margin: 0;
   min-width: 0;
@@ -1398,6 +1420,19 @@ label input[type='file'] {
 
 .agent-message.user p {
   color: #f1f6fb;
+}
+
+.agent-chat-pill {
+  max-width: min(100%, 280px);
+  padding: 8px 11px;
+  border: 1px solid #2a4657;
+  border-radius: 14px;
+  background: #27323f;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+}
+
+.agent-chat-pill p {
+  color: #f0f4f8;
 }
 
 .agent-message-body {

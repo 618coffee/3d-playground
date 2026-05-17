@@ -304,6 +304,73 @@ describe('AgentPanel', () => {
     expect(await within(screen.getByLabelText('AI conversation feed')).findByText(prompt)).toBeInTheDocument();
   });
 
+  it('shows sent user requests as labeled chat pills and stacks agent replies below their label', async () => {
+    clearAgentChatStorage();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kind: 'message', text: '当前场景包含默认对象。' }), { status: 200 })));
+
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const prompt = '解释当前场景';
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: prompt } });
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+
+    const feed = screen.getByLabelText('AI conversation feed');
+    const userMessage = await within(feed).findByText(prompt);
+    const userRow = userMessage.closest('.agent-message');
+    const agentResponse = (await within(feed).findAllByText('当前场景包含默认对象。'))[0];
+    const agentRow = agentResponse.closest('.agent-message');
+
+    expect(userRow).toHaveClass('user');
+    expect(userMessage.closest('.agent-chat-pill')).toBeTruthy();
+    expect(within(userRow as HTMLElement).getByText('You')).toBeInTheDocument();
+    expect(agentRow).toHaveClass('assistant');
+    expect(within(agentRow as HTMLElement).getByText('Agent')).toBeInTheDocument();
+    expect(agentRow?.children[0]).toHaveTextContent('Agent');
+    expect(agentRow?.children[1]).toContainElement(agentResponse);
+    expect(within(feed).getAllByText('当前场景包含默认对象。')).toHaveLength(1);
+    expect(within(feed).queryByText('AI 回复')).not.toBeInTheDocument();
+    expect(screen.queryByText('Idle')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ready')).not.toBeInTheDocument();
+  });
+
+  it('deletes chat history sessions from the history picker', async () => {
+    clearAgentChatStorage();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kind: 'message', text: '已收到。' }), { status: 200 })));
+
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const firstPrompt = '解释当前场景';
+    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: firstPrompt } });
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+    await within(screen.getByLabelText('AI conversation feed')).findByText(firstPrompt);
+
+    fireEvent.click(screen.getByRole('button', { name: '新建聊天' }));
+    fireEvent.click(screen.getByRole('button', { name: '历史会话' }));
+    fireEvent.click(within(screen.getByLabelText('历史会话列表')).getByRole('button', { name: `删除 ${firstPrompt}` }));
+
+    expect(within(screen.getByLabelText('历史会话列表')).queryByRole('button', { name: firstPrompt })).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('AI conversation feed')).queryByText(firstPrompt)).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(AGENT_CHAT_SESSIONS_STORAGE_KEY) ?? '[]')).toEqual([
+      expect.objectContaining({ messages: [] }),
+    ]);
+  });
+
   it('keeps the active response actionable when reselecting the current history session', async () => {
     const cancelPending = vi.fn();
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(cloneDraft), { status: 200 })));
@@ -521,7 +588,7 @@ describe('AgentPanel', () => {
 
     expect(signals[1]?.aborted).toBe(true);
     expect(screen.queryByRole('button', { name: '停止生成' })).not.toBeInTheDocument();
-    expect(screen.getByText('Idle')).toBeInTheDocument();
+    expect(screen.queryByText('Idle')).not.toBeInTheDocument();
 
     await act(async () => {
       resolveSecondResponse(new Response(JSON.stringify(cloneDraft), { status: 200 }));
@@ -679,6 +746,37 @@ describe('AgentPanel', () => {
 
     expect(within(feed).getAllByText('操作草稿')).toHaveLength(1);
     expect(screen.getAllByText('操作草稿')).toHaveLength(1);
+  });
+
+  it('summarizes action drafts without duplicate operation fields and names selected targets', async () => {
+    const selectedMesh = createMesh('fan-stage', 'Blue titanium fan stage', true);
+    const scene = createInitialScene([selectedMesh]);
+    const draft: AgentResponse = {
+      ...cloneDraft,
+      explanation: '复制当前选中的对象。',
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(draft), { status: 200 })));
+
+    render(
+      <AgentPanel
+        scene={scene}
+        selectedMeshes={[selectedMesh]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+
+    await screen.findByRole('button', { name: /确认执行/ });
+    const summaryGrid = document.querySelector('.agent-review-grid') as HTMLElement;
+
+    expect(summaryGrid).toBeTruthy();
+    expect(within(summaryGrid).queryByText('操作')).not.toBeInTheDocument();
+    expect(within(summaryGrid).queryByText('cloneMesh')).not.toBeInTheDocument();
+    expect(within(summaryGrid).queryByText('当前选择')).not.toBeInTheDocument();
+    expect(within(summaryGrid).getByText('Blue titanium fan stage')).toBeInTheDocument();
   });
 
   it('makes the previous executable response read-only when a newer request starts', async () => {
