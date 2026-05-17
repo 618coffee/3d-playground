@@ -31,13 +31,6 @@ type AgentStatus = 'idle' | 'loading' | 'ready' | 'error' | 'cancelled';
 type PlanStepStatus = 'pending' | 'applied' | 'blocked' | 'failed';
 type AgentSessionState = { sessions: AgentChatSession[]; activeSessionId: string };
 
-const examples = [
-  '把当前对象绕 Z 轴旋转 30 度',
-  '复制选中对象 3 个，沿 X 方向间隔 20mm',
-  '沿 X=0 平面切开当前对象，只保留右半边',
-  '重置视角',
-];
-
 export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pendingCommand, onExecute, onConfirmPending, onCancelPending, onPreviewDraft }: AgentPanelProps) {
   const fallbackAdapter = useMemo(() => createRuleParserAdapter(), []);
   const adapter = useMemo(() => createAgentAdapter(fallbackAdapter), [fallbackAdapter]);
@@ -346,14 +339,6 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
             </div>
           ))}
         </section>
-
-      {activeSession.messages.length === 0 ? (
-        <section className="agent-starter-prompts agent-chip-row chip-row" aria-label="Starter prompts">
-          {examples.map((example) => (
-            <button key={example} disabled={status === 'loading'} onClick={() => void sendRequest(example)}>{example}</button>
-          ))}
-        </section>
-      ) : null}
 
       <ConversationFeed
         messages={activeSession.messages}

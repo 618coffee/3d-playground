@@ -1352,10 +1352,6 @@ label input[type='file'] {
   background: #251820;
 }
 
-.agent-starter-prompts {
-  flex: 0 0 auto;
-}
-
 .agent-prompt-card {
   padding: 10px;
   display: grid;

@@ -144,7 +144,7 @@ describe('App agent draft previews', () => {
     const shell = document.querySelector('.app-shell') as HTMLElement;
 
     fireEvent.click(screen.getByRole('button', { name: '隐藏对象树' }));
-    fireEvent.click(screen.getByRole('button', { name: '隐藏检查器' }));
+    fireEvent.click(screen.getByRole('button', { name: '隐藏操作台' }));
     fireEvent.click(screen.getByRole('button', { name: '隐藏时间线' }));
 
     expect(document.querySelector('.left-panel-slot')).toHaveClass('is-hidden');

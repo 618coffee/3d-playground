@@ -24,16 +24,16 @@ export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEnt
   return (
     <aside className="right-panel panel-shell">
       <div className="inspector-header">
-        <strong>检查器</strong>
+        <strong>操作台</strong>
         {onHidePanel ? (
-          <button type="button" className="icon-button panel-icon-button" onClick={onHidePanel} title="隐藏检查器" aria-label="隐藏检查器">
+          <button type="button" className="icon-button panel-icon-button" onClick={onHidePanel} title="隐藏操作台" aria-label="隐藏操作台">
             <PanelRightClose size={15} aria-hidden="true" />
           </button>
         ) : null}
       </div>
       <div className="tabs two-tabs">
-        <button className={tab === 'operations' ? 'active' : ''} onClick={() => setTab('operations')}><SlidersHorizontal size={15} /> 操作</button>
-        <button className={tab === 'agent' ? 'active' : ''} onClick={() => setTab('agent')}><Bot size={15} /> AI</button>
+        <button className={tab === 'operations' ? 'active' : ''} onClick={() => setTab('operations')}><SlidersHorizontal size={15} /> 手动</button>
+        <button className={tab === 'agent' ? 'active' : ''} onClick={() => setTab('agent')}><Bot size={15} /> AI 助手</button>
       </div>
       <PendingActionCard command={pendingCommand?.source === 'agent' ? null : pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
       {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} selectedCount={selectedMeshes.length} scene={scene} onExecute={onExecute} /> : null}

@@ -162,9 +162,8 @@ describe('AgentPanel', () => {
     expect(input.compareDocumentPosition(controls as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('renders starter suggestions only for an empty session and uses a bottom composer surface', async () => {
+  it('does not render starter suggestions in an empty session and keeps the bottom composer surface', () => {
     clearAgentChatStorage();
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kind: 'message', text: '已收到。' }), { status: 200 })));
 
     render(
       <AgentPanel
@@ -177,18 +176,14 @@ describe('AgentPanel', () => {
     );
 
     const composer = screen.getByRole('region', { name: 'AI composer' });
-    const starterPrompt = '把当前对象绕 Z 轴旋转 30 度';
 
-    expect(screen.getByRole('button', { name: starterPrompt })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Starter prompts' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '把当前对象绕 Z 轴旋转 30 度' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '复制选中对象 3 个，沿 X 方向间隔 20mm' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '沿 X=0 平面切开当前对象，只保留右半边' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重置视角' })).not.toBeInTheDocument();
     expect(composer).toHaveClass('agent-composer');
     expect(composer).toContainElement(screen.getByLabelText('AI 指令输入'));
-
-    fireEvent.change(screen.getByLabelText('AI 指令输入'), { target: { value: '解释当前场景' } });
-    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
-
-    await waitFor(() => expect(screen.queryByRole('button', { name: starterPrompt })).not.toBeInTheDocument());
-
-    expect(screen.queryByRole('button', { name: starterPrompt })).not.toBeInTheDocument();
   });
 
   it('sends session mode and model router metadata with agent requests', async () => {

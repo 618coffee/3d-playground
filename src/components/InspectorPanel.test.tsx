@@ -32,6 +32,26 @@ const uiClipCommand: OperationCommand = {
 };
 
 describe('InspectorPanel', () => {
+  it('labels the right panel as an operation workspace with manual and AI assistant tabs', () => {
+    render(
+      <InspectorPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onConfirmPending={vi.fn()}
+        onCancelPending={vi.fn()}
+        onExecute={vi.fn()}
+        onHidePanel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('操作台')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '隐藏操作台' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /手动/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /AI 助手/ })).toBeInTheDocument();
+  });
+
   it('keeps the AI chat composer visible when no object is selected', () => {
     render(
       <InspectorPanel

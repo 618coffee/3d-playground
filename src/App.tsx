@@ -361,7 +361,7 @@ export default function App() {
             </div>
         </div>
         <div className={`panel-slot right-panel-slot ${panelVisibility.right ? '' : 'is-hidden'}`} {...hiddenPanelProps(!panelVisibility.right)}>
-            <div className="panel-resize-handle resize-handle-left" role="separator" aria-orientation="vertical" title="调整检查器宽度" onMouseDown={(event) => startPanelResize('right', event)} />
+            <div className="panel-resize-handle resize-handle-left" role="separator" aria-orientation="vertical" title="调整操作台宽度" onMouseDown={(event) => startPanelResize('right', event)} />
             <InspectorPanel
               scene={scene}
               selectedMesh={selectedMesh}
@@ -385,7 +385,7 @@ function PanelRestoreControls({ visibility, onTogglePanel }: { visibility: Panel
   return (
     <div className="panel-restore-layer" aria-label="面板恢复控制">
       {!visibility.left ? <button className="restore-panel-button restore-left" onClick={() => onTogglePanel('left')}>对象树</button> : null}
-      {!visibility.right ? <button className="restore-panel-button restore-right" onClick={() => onTogglePanel('right')}>检查器</button> : null}
+      {!visibility.right ? <button className="restore-panel-button restore-right" onClick={() => onTogglePanel('right')}>操作台</button> : null}
       {!visibility.bottom ? <button className="restore-panel-button restore-bottom" onClick={() => onTogglePanel('bottom')}>时间线</button> : null}
     </div>
   );

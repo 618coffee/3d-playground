@@ -88,7 +88,7 @@ export function TopBar({
         <button className={`icon-button ${panelVisibility.left ? 'active' : ''}`} onClick={() => onTogglePanel('left')} title={panelVisibility.left ? '隐藏左侧对象树' : '显示左侧对象树'} aria-pressed={panelVisibility.left}>
           {panelVisibility.left ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
         </button>
-        <button className={`icon-button ${panelVisibility.right ? 'active' : ''}`} onClick={() => onTogglePanel('right')} title={panelVisibility.right ? '隐藏右侧检查器' : '显示右侧检查器'} aria-pressed={panelVisibility.right}>
+        <button className={`icon-button ${panelVisibility.right ? 'active' : ''}`} onClick={() => onTogglePanel('right')} title={panelVisibility.right ? '隐藏右侧操作台' : '显示右侧操作台'} aria-pressed={panelVisibility.right}>
           {panelVisibility.right ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
         </button>
         <button className={`icon-button ${panelVisibility.bottom ? 'active' : ''}`} onClick={() => onTogglePanel('bottom')} title={panelVisibility.bottom ? '隐藏底部时间线' : '显示底部时间线'} aria-pressed={panelVisibility.bottom}>
