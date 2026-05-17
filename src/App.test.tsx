@@ -94,6 +94,8 @@ describe('App agent draft previews', () => {
 
     await waitFor(() => expect(runtimeMock.runtime.rotateMesh).toHaveBeenCalledTimes(2));
     expect(runtimeMock.runtime.rotateMesh).toHaveBeenLastCalledWith('fan-stage', 'z', 90);
+    expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).getByText('rotateMesh')).toBeInTheDocument();
+    expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).getByText('把当前对象绕 Z 轴旋转 90 度')).toBeInTheDocument();
   });
 
   it('uses wider default sidebars', async () => {

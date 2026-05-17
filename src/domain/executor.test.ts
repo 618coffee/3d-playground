@@ -23,7 +23,7 @@ const mesh: MeshEntity = {
 };
 
 describe('operation executor', () => {
-  it('rotates selected meshes without recording history', () => {
+  it('keeps ui rotate updates out of history', () => {
     const history = createHistoryStore(createInitialScene([mesh]));
     const executor = createOperationExecutor(history);
     const command: OperationCommand = {
@@ -31,7 +31,7 @@ describe('operation executor', () => {
       type: 'rotateMesh',
       target: { source: 'selection' },
       params: { axis: 'z', angleDeg: 30, pivot: 'boundsCenter', space: 'world' },
-      source: 'agent',
+      source: 'ui',
     };
 
     const result = executor.execute(command);
@@ -40,6 +40,26 @@ describe('operation executor', () => {
     expect(result.affectedMeshIds).toEqual(['fan-1']);
     expect(history.current().meshes[0].transform.rotationDeg).toEqual([0, 0, 30]);
     expect(history.entries()).toHaveLength(0);
+  });
+
+  it('records agent rotate commands in history', () => {
+    const history = createHistoryStore(createInitialScene([mesh]));
+    const executor = createOperationExecutor(history);
+    const command: OperationCommand = {
+      id: 'agent-rotate-1',
+      type: 'rotateMesh',
+      target: { source: 'selection' },
+      params: { axis: 'z', angleDeg: 30, pivot: 'boundsCenter', space: 'world' },
+      source: 'agent',
+      rawText: '把当前对象绕 Z 轴旋转 30 度',
+      confirmed: true,
+    };
+
+    const result = executor.execute(command);
+
+    expect(result.status).toBe('applied');
+    expect(history.current().meshes[0].transform.rotationDeg).toEqual([0, 0, 30]);
+    expect(history.entries().map((entry) => entry.command)).toEqual([command]);
   });
 
   it('skips repeated selection entries while keeping changed selections', () => {
