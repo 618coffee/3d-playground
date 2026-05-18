@@ -38,6 +38,15 @@ npm run build
 npm test
 ```
 
+后端 agent API 单独验证：
+
+```bash
+cd backend/agent-api
+npm install
+npm test
+npm run check
+```
+
 浏览器烟测（需要本机 Chrome，默认检测 `http://127.0.0.1:4173/`）：
 
 ```bash
@@ -50,22 +59,37 @@ npm run smoke:browser
 - 浏览器内 `vtk.js` 三维渲染工作台。
 - 自动加载程序生成的涡扇发动机风格剖视模型，并可切换到机器人检测产线示例工作区。
 - 支持导入本地 `.stl`、`.obj`、`.ply`、`.vtp` 文件。
-- 左侧对象树、中央 3D 视窗、右侧属性/操作/AI 面板、底部操作时间线。
-- 手动操作：对象树搜索、可见/锁定切换、视窗点选、显示模式、绕 X/Y/Z 轴旋转、复制、可配置视觉切割预览/应用、适配视图、撤销/重做。
-- AI 操作：自然语言通过本地 `agent-api` 生成白名单 `AgentResponse` / `OperationCommand` 草稿，再由同一个 `OperationExecutor` 校验、预览、确认和执行。
+- 左侧对象树、中央 3D 视窗、右侧属性/手动操作/AI 助手面板、底部操作时间线，并支持折叠和调整面板尺寸。
+- 手动操作：对象树搜索、可见/锁定切换、视窗点选、显示模式、移动、绕 X/Y/Z 轴旋转、复制、可配置视觉切割预览/应用、适配视图、撤销/重做。
+- AI 助手：支持 Ask / Edit / Agent 模式、历史会话、请求取消、结构化 JSON 调试，以及基于当前选择和历史的上下文请求。
+- AI 操作：自然语言通过本地 `agent-api` 生成白名单 `AgentResponse` / `OperationCommand` 草稿，再由同一个 `OperationExecutor` 校验、预览、确认和执行；响应类型覆盖澄清、场景问答、单步操作草稿、多步操作计划、宏草稿和后端作业草稿。
 - LLM 后端：`AGENT_MODE=mock` 默认不需要凭据；`AGENT_MODE=llm` 可接 OpenAI-compatible、Azure OpenAI 或 Azure AI Inference / AI Services endpoint。
 - 后端作业边界：真实几何切割、网格划分、求解器和结果摘要目前只生成 `backendJobDraft` 草稿，不会启动 worker 或修改三维场景。
 
 ## 可演示的 AI 命令
 
 ```text
-把当前对象绕 Z 轴旋转 30 度
-复制选中对象 3 个，沿 X 方向间隔 20mm
-沿 X=0 平面切开当前对象，只保留右半边
+选择 nacelle
+将选中对象沿 X 方向移动 20mm
+把 nacelle 绕 Z 轴旋转 90 度
+复制 stator 3 个，沿 X 方向间隔 10mm
+沿 Z=0 平面切开全部可见对象，只保留正半边
+这个场景里有哪些对象？
 重置视角
 ```
 
-AI 面板会先展示解析结果、置信度和结构化 JSON。切割类操作进入预览/确认语义，不直接做不可逆几何修改；真实几何切割仍是增强版能力。
+AI 面板会先展示解析结果、风险提示和结构化 JSON。Edit 模式一次生成一个可审阅操作草稿；Agent 模式可返回多步计划或宏草稿。切割类操作进入预览/确认语义，不直接做不可逆几何修改；真实几何切割仍是增强版能力。
+
+## 功能演示视频
+
+以下录屏可作为 GitHub README 的项目功能展示入口。GitHub 对仓库内 `.mp4` 通常会打开视频预览页；如果需要在 README 页面内直接显示播放器，可以把视频上传到 GitHub 后，用生成的 `user-attachments` 链接替换下方路径。
+
+| 功能 | 录屏 |
+| --- | --- |
+| AI 移动选中对象：沿 X 方向移动 20mm | [播放](artifacts/ai-workflow-recordings/01-move-selection-x-20mm.mp4) |
+| AI 旋转对象：将 nacelle 绕 Z 轴旋转 90 度 | [播放](artifacts/ai-workflow-recordings/02-rotate-nacelle-z-90deg.mp4) |
+| AI 复制对象：复制 stator 并沿 X 方向间隔 10mm | [播放](artifacts/ai-workflow-recordings/03-clone-stator-x-10mm.mp4) |
+| AI 切割预览：沿 Z=0 平面保留正半空间 | [播放](artifacts/ai-workflow-recordings/04-clip-all-z0-positive.mp4) |
 
 ## 架构
 
