@@ -1,6 +1,11 @@
 import type { OperationCommand } from './actions';
 import type { SceneState } from './scene';
 
+export type AgentMeshReference = {
+  label: string;
+  meshId: string;
+};
+
 export type ActionRiskLevel = 'low' | 'medium' | 'high' | 'blocked';
 
 export type ActionRisk = {
@@ -66,6 +71,7 @@ export type AgentChatMessage = {
     text: string;
     mode: AgentMode;
     modelRouterId: ModelRouterId;
+    meshReferences?: AgentMeshReference[];
   };
   response?: AgentResponse;
   createdAt: string;
@@ -97,6 +103,7 @@ export type AgentRequest = {
   scene: SceneState;
   conversation: AgentConversationTurn[];
   pendingCommand?: OperationCommand | null;
+  meshReferences?: AgentMeshReference[];
   context?: unknown;
 };
 

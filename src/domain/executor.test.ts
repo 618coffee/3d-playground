@@ -104,6 +104,31 @@ describe('operation executor', () => {
     expect(history.entries().map((entry) => entry.command)).toEqual([command]);
   });
 
+  it('deletes selected meshes and records the command', () => {
+    const otherMesh = { ...mesh, id: 'fan-2', name: 'second fan', selected: false };
+    const history = createHistoryStore(createInitialScene([mesh, otherMesh]));
+    const runtime = { removeMesh: vi.fn(), selectMeshes: vi.fn() } as unknown as ViewerRuntimePort;
+    const executor = createOperationExecutor(history, runtime);
+    const command: OperationCommand = {
+      id: 'delete-1',
+      type: 'deleteMesh',
+      target: { source: 'selection' },
+      params: {},
+      source: 'ui',
+      rawText: 'keyboard delete selected meshes',
+    };
+
+    const result = executor.execute(command);
+
+    expect(result.status).toBe('applied');
+    expect(result.affectedMeshIds).toEqual(['fan-1']);
+    expect(history.current().meshes.map((item) => item.id)).toEqual(['fan-2']);
+    expect(history.current().selection).toEqual([]);
+    expect(runtime.removeMesh).toHaveBeenCalledWith('fan-1');
+    expect(runtime.selectMeshes).toHaveBeenCalledWith([]);
+    expect(history.entries().map((entry) => entry.command)).toEqual([command]);
+  });
+
   it('skips repeated selection entries while keeping changed selections', () => {
     const otherMesh = { ...mesh, id: 'fan-2', name: 'second fan', selected: false };
     const history = createHistoryStore(createInitialScene([mesh, otherMesh]));

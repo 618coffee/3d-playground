@@ -11,7 +11,7 @@ export function createRuleParserAdapter(): AgentAdapter {
     label: 'Offline fallback',
     async respond(request: AgentRequest, options) {
       throwIfAborted(options?.signal);
-      const response = parseResultToAgentResponse(parser.parse(request.text, request.scene));
+      const response = parseResultToAgentResponse(parser.parse(request.text, request.scene, request.meshReferences));
       throwIfAborted(options?.signal);
       return response;
     },

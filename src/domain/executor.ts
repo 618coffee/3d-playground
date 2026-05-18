@@ -8,6 +8,7 @@ export type ViewerRuntimePort = {
   moveMesh?: (meshId: string, offset: Vec3) => void;
   setMeshScale?: (meshId: string, scale: Vec3) => void;
   cloneMesh?: (sourceId: string, clone: MeshEntity) => void;
+  removeMesh?: (meshId: string) => void;
   previewClip?: (meshId: string, clip: VisualClip) => void;
   clearClip?: (meshId: string) => void;
   resetView?: (orientation?: 'isometric' | 'front' | 'top' | 'right') => void;
@@ -147,6 +148,19 @@ function applyToScene(
           ? { ...mesh, transform: { ...mesh.transform, scale: [...command.params.scale] } }
           : mesh
       )),
+    };
+  }
+
+  if (command.type === 'deleteMesh') {
+    targetIds.forEach((meshId) => runtime?.removeMesh?.(meshId));
+    const nextSelection = scene.selection.filter((id) => !targetIds.includes(id));
+    runtime?.selectMeshes?.(nextSelection);
+    return {
+      ...scene,
+      selection: nextSelection,
+      meshes: scene.meshes
+        .filter((mesh) => !targetIds.includes(mesh.id))
+        .map((mesh) => ({ ...mesh, selected: nextSelection.includes(mesh.id) })),
     };
   }
 
@@ -296,6 +310,7 @@ function successMessage(command: OperationCommand): string {
   if (command.type === 'rotateMesh') return `已旋转 ${command.params.angleDeg} 度。`;
   if (command.type === 'moveMesh') return `已移动 ${command.params.offset.join(', ')} ${command.params.unit}。`;
   if (command.type === 'cloneMesh') return `已复制 ${clampCloneCount(command.params.count)} 个对象。`;
+  if (command.type === 'deleteMesh') return '已删除选中对象。';
   if (command.type === 'setMeshScale') return `已缩放对象到 ${command.params.scale[0].toFixed(2)}x。`;
   if (command.type === 'selectMesh') return '已更新选择。';
   if (command.type === 'resetView') return '已重置视角。';

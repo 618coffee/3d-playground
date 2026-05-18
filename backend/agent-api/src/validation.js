@@ -23,6 +23,7 @@ export function validateAgentRequest(input) {
 
   const context = isRecord(input.context) ? input.context : undefined;
   const scene = validateScene(input.scene ?? context?.scene);
+  const meshReferences = validateMeshReferences(input.meshReferences, scene);
 
   return {
     requestId: optionalString(input.requestId ?? input.id, 'requestId', 128) ?? randomUUID(),
@@ -33,6 +34,7 @@ export function validateAgentRequest(input) {
     scene,
     pendingAction: isRecord(input.pendingAction) ? input.pendingAction : undefined,
     pendingCommand: isRecord(input.pendingCommand) ? input.pendingCommand : undefined,
+    meshReferences,
     conversation: validateConversation(input.conversation ?? input.messages),
   };
 }
@@ -208,6 +210,14 @@ export function validateOperationCommand(input, request) {
     };
   }
 
+  if (type === 'deleteMesh') {
+    return {
+      ...common,
+      target,
+      params: {},
+    };
+  }
+
   if (type === 'setMeshScale') {
     return {
       ...common,
@@ -304,6 +314,19 @@ function validateScene(input) {
     unit: UNITS.includes(input.unit) ? input.unit : 'mm',
     displayMode: DISPLAY_MODES.includes(input.displayMode) ? input.displayMode : 'surface',
   };
+}
+
+function validateMeshReferences(input, scene) {
+  if (!Array.isArray(input)) return [];
+  const meshIds = new Set(scene.meshes.map((mesh) => mesh.id));
+  return input
+    .filter(isRecord)
+    .map((reference) => ({
+      label: typeof reference.label === 'string' ? reference.label.trim() : '',
+      meshId: typeof reference.meshId === 'string' ? reference.meshId.trim() : '',
+    }))
+    .filter((reference) => reference.label && reference.meshId && meshIds.has(reference.meshId))
+    .slice(0, 50);
 }
 
 function validateSceneMesh(mesh) {
@@ -508,6 +531,7 @@ function defaultExplanation(command) {
   if (command.type === 'rotateMesh') return `Rotate the target ${command.params.angleDeg} degrees.`;
   if (command.type === 'moveMesh') return `Move the target by ${command.params.offset.join(', ')} ${command.params.unit}.`;
   if (command.type === 'cloneMesh') return `Clone the target ${command.params.count} time(s).`;
+  if (command.type === 'deleteMesh') return 'Delete the target mesh.';
   if (command.type === 'clipMesh') return 'Create a visual clipping draft for review.';
   return `Prepare ${command.type} for review.`;
 }
@@ -518,6 +542,7 @@ function commandTitle(command) {
   if (command.type === 'rotateMesh') return 'Rotate mesh';
   if (command.type === 'moveMesh') return 'Move mesh';
   if (command.type === 'cloneMesh') return 'Clone mesh';
+  if (command.type === 'deleteMesh') return 'Delete mesh';
   if (command.type === 'clipMesh') return 'Preview clip';
   if (command.type === 'selectMesh') return 'Select mesh';
   if (command.type === 'setMeshVisibility') return 'Set visibility';

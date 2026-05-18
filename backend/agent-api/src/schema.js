@@ -3,6 +3,7 @@ export const COMMAND_TYPES = [
   'rotateMesh',
   'moveMesh',
   'cloneMesh',
+  'deleteMesh',
   'setMeshScale',
   'clipMesh',
   'resetView',
@@ -110,6 +111,7 @@ export const OPERATION_COMMAND_SCHEMA = {
     rotateMesh: { params: { axis: ['x', 'y', 'z', '[x,y,z]'], angleDeg: 'number', pivot: ['boundsCenter', 'origin', '[x,y,z]'], space: ['world', 'local'] } },
     moveMesh: { params: { offset: '[x,y,z] relative movement in unit', unit: UNITS } },
     cloneMesh: { params: { count: 'integer 1..12', offset: '[x,y,z]', unit: UNITS, shareGeometry: 'boolean', namePattern: 'string with optional {name} and {n}' } },
+    deleteMesh: { params: {} },
     setMeshScale: { params: { scale: '[x,y,z], all > 0' } },
     clipMesh: {
       guidance: 'Use for viewer-safe plane clipping, including 切开/裁剪/剖切/clip/cut/section/slice unless the user explicitly asks for permanent/baked/boolean/exported geometry. Do not ask whether to use visual or permanent clipping for simple plane clips; default to reversible visual clipping with cap true. XY plane normal is [0,0,1], XZ plane normal is [0,1,0], YZ plane normal is [1,0,0]. Use mode applyVisualClip for AI drafts that should preview then confirm.',

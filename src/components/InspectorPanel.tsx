@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useId, useMemo, useState } from 'react';
 import { Bot, Check, ChevronDown, ChevronUp, PanelRightClose, SlidersHorizontal, X } from 'lucide-react';
 import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import type { HistoryEntry } from '../domain/history';
+import type { MeshClipboardEntry } from '../domain/meshClipboard';
 import type { SceneState } from '../domain/scene';
 import { AgentPanel } from './AgentPanel';
 
@@ -16,11 +17,12 @@ type InspectorPanelProps = {
   onExecute: (command: OperationCommand) => ActionResult;
   onPreviewDraft?: (command: OperationCommand) => void;
   onHidePanel?: () => void;
+  meshClipboard?: MeshClipboardEntry[];
 };
 
 const axisOptions = ['x', 'y', 'z'] as const;
 
-export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEntries, pendingCommand, onConfirmPending, onCancelPending, onExecute, onPreviewDraft, onHidePanel }: InspectorPanelProps) {
+export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEntries, pendingCommand, onConfirmPending, onCancelPending, onExecute, onPreviewDraft, onHidePanel, meshClipboard = [] }: InspectorPanelProps) {
   const [tab, setTab] = useState<'operations' | 'agent'>('agent');
 
   return (
@@ -39,7 +41,7 @@ export function InspectorPanel({ scene, selectedMesh, selectedMeshes, historyEnt
       </div>
       <PendingActionCard command={pendingCommand?.source === 'agent' ? null : pendingCommand} onConfirm={onConfirmPending} onCancel={onCancelPending} />
       {tab === 'operations' ? <OperationsTab selectedMesh={selectedMesh} scene={scene} onExecute={onExecute} /> : null}
-      {tab === 'agent' ? <AgentPanel scene={scene} selectedMeshes={selectedMeshes} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onConfirmPending={onConfirmPending} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} /> : null}
+      {tab === 'agent' ? <AgentPanel scene={scene} selectedMeshes={selectedMeshes} historyEntries={historyEntries} pendingCommand={pendingCommand} onExecute={onExecute} onConfirmPending={onConfirmPending} onCancelPending={onCancelPending} onPreviewDraft={onPreviewDraft} meshClipboard={meshClipboard} /> : null}
     </aside>
   );
 }

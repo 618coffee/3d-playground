@@ -130,6 +130,11 @@ export type OperationCommand =
       };
     })
   | (CommandMeta & {
+      type: 'deleteMesh';
+      target: MeshTarget;
+      params: Record<string, never>;
+    })
+  | (CommandMeta & {
       type: 'setMeshScale';
       target: MeshTarget;
       params: { scale: Vec3 };

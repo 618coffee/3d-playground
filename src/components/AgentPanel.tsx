@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ClipboardEvent } from 'react';
 import { ArrowUp, Check, ChevronDown, ChevronRight, History, Play, Plus, Sparkles, Square, Trash2, X } from 'lucide-react';
 import { buildAgentContext } from '../agent/context';
 import { createLlmAgentClient, createRuleParserAdapter } from '../agent/adapters';
@@ -12,7 +13,9 @@ import {
 } from '../agent/chatSessions';
 import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import type { HistoryEntry } from '../domain/history';
-import type { ActionRisk, AgentAdapter, AgentChatMessage, AgentChatSession, AgentConversationTurn, AgentMode, AgentPlanStep, AgentResponse, ModelRouterId } from '../domain/protocol';
+import { meshMentionText } from '../domain/meshClipboard';
+import type { MeshClipboardEntry } from '../domain/meshClipboard';
+import type { ActionRisk, AgentAdapter, AgentChatMessage, AgentChatSession, AgentConversationTurn, AgentMeshReference, AgentMode, AgentPlanStep, AgentResponse, ModelRouterId } from '../domain/protocol';
 import type { SceneState } from '../domain/scene';
 import { validateAgentResponse } from '../domain/validators';
 
@@ -25,17 +28,19 @@ type AgentPanelProps = {
   onConfirmPending?: () => void;
   onCancelPending?: () => void;
   onPreviewDraft?: (command: OperationCommand) => void;
+  meshClipboard?: MeshClipboardEntry[];
 };
 
 type AgentStatus = 'idle' | 'loading' | 'ready' | 'error' | 'cancelled';
 type PlanStepStatus = 'pending' | 'applied' | 'blocked' | 'failed';
 type AgentSessionState = { sessions: AgentChatSession[]; activeSessionId: string };
 
-export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pendingCommand, onExecute, onConfirmPending, onCancelPending, onPreviewDraft }: AgentPanelProps) {
+export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pendingCommand, onExecute, onConfirmPending, onCancelPending, onPreviewDraft, meshClipboard = [] }: AgentPanelProps) {
   const fallbackAdapter = useMemo(() => createRuleParserAdapter(), []);
   const adapter = useMemo(() => createAgentAdapter(fallbackAdapter), [fallbackAdapter]);
   const [sessionState, setSessionState] = useState<AgentSessionState>(() => createInitialSessionState(scene, historyEntries));
   const [text, setText] = useState('');
+  const [draftMeshReferences, setDraftMeshReferences] = useState<AgentMeshReference[]>([]);
   const [activeResponseMessageId, setActiveResponseMessageId] = useState<string | null>(null);
   const [status, setStatus] = useState<AgentStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +114,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     cancelPendingPreview();
     const nextSession = createAgentChatSession(summarizeSessionContext(scene, historyEntries));
     persistSession(nextSession);
+    setDraftMeshReferences([]);
     setActiveResponseMessageId(null);
     setError(null);
     setDebugOpen(false);
@@ -127,6 +133,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     invalidateInFlightRequest();
     cancelPendingPreview();
     replaceSessionState({ sessions: sessionStateRef.current.sessions, activeSessionId: nextSession.id });
+    setDraftMeshReferences([]);
     setActiveResponseMessageId(null);
     setError(null);
     setDebugOpen(false);
@@ -156,6 +163,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
 
     if (deletingActiveSession) {
       setActiveResponseMessageId(null);
+      setDraftMeshReferences([]);
       setError(null);
       setDebugOpen(false);
       setPlanStatuses({});
@@ -204,6 +212,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     const shouldCancelPendingForNewRequest = Boolean(activeResponseMessageId) && effectivePendingCommand?.source === 'agent';
     const pendingCommandForRequest = shouldCancelPendingForNewRequest ? null : effectivePendingCommand;
     if (shouldCancelPendingForNewRequest) cancelPendingPreview();
+    const meshReferencesForRequest = filterActiveMeshReferences(prompt, draftMeshReferences, scene);
 
     const requestSerial = requestSerialRef.current + 1;
     requestSerialRef.current = requestSerial;
@@ -213,11 +222,12 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     const requestSession = appendAgentChatMessage(currentSession, {
       role: 'user',
       text: prompt,
-      request: { text: prompt, mode: currentSession.mode, modelRouterId: currentSession.modelRouterId },
+      request: { text: prompt, mode: currentSession.mode, modelRouterId: currentSession.modelRouterId, meshReferences: meshReferencesForRequest },
     });
     const nextConversation = sessionMessagesToConversation(requestSession.messages);
 
     setText('');
+    setDraftMeshReferences([]);
     persistSession(requestSession);
     setActiveResponseMessageId(null);
     setStatus('loading');
@@ -235,6 +245,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
         scene,
         conversation: nextConversation.slice(-8),
         pendingCommand: pendingCommandForRequest,
+        meshReferences: meshReferencesForRequest,
         context: buildAgentContext(scene, historyEntries),
       }, { signal: controller.signal });
       const validated = validateAgentResponse(next);
@@ -311,6 +322,29 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     onConfirmPending?.();
   };
 
+  const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (meshClipboard.length === 0) return;
+
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const mentionText = meshMentionText(meshClipboard);
+    const selectionStart = textarea.selectionStart ?? text.length;
+    const selectionEnd = textarea.selectionEnd ?? selectionStart;
+    const beforeSelection = text.slice(0, selectionStart);
+    const afterSelection = text.slice(selectionEnd);
+    const prefix = beforeSelection.length > 0 && !/\s$/.test(beforeSelection) ? ' ' : '';
+    const suffix = afterSelection.length > 0 && !/^\s/.test(afterSelection) ? ' ' : '';
+    const nextText = `${beforeSelection}${prefix}${mentionText}${suffix}${afterSelection}`;
+    const nextCursorPosition = beforeSelection.length + prefix.length + mentionText.length;
+
+    setText(nextText);
+    setDraftMeshReferences((current) => mergeMeshReferences(
+      current,
+      meshClipboard.map((entry) => ({ label: `@${entry.name}`, meshId: entry.id })),
+    ));
+    window.requestAnimationFrame(() => textarea.setSelectionRange(nextCursorPosition, nextCursorPosition));
+  };
+
   return (
     <div className="panel-body stacked agent-review-surface agent-chat-shell">
       <div className="agent-session-header" aria-label="Current chat session">
@@ -376,6 +410,7 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
             aria-label="AI 指令输入"
             value={text}
             onChange={(event) => setText(event.target.value)}
+            onPaste={handleComposerPaste}
             rows={3}
             placeholder="描述要审阅的 3D 操作"
           />
@@ -752,6 +787,66 @@ function hiddenDrawerProps(hidden: boolean) {
   return hidden ? { 'aria-hidden': true, inert: '' } : {};
 }
 
+function mergeMeshReferences(current: AgentMeshReference[], next: AgentMeshReference[]): AgentMeshReference[] {
+  const merged = [...current];
+  for (const reference of next) {
+    if (!merged.some((existing) => existing.label === reference.label && existing.meshId === reference.meshId)) {
+      merged.push(reference);
+    }
+  }
+  return merged;
+}
+
+function filterActiveMeshReferences(prompt: string, references: AgentMeshReference[], scene: SceneState): AgentMeshReference[] {
+  const sceneMeshIds = new Set(scene.meshes.map((mesh) => mesh.id));
+  return findCompleteMentionReferences(prompt, references)
+    .filter((reference) => sceneMeshIds.has(reference.meshId));
+}
+
+function findCompleteMentionReferences(prompt: string, references: AgentMeshReference[]): AgentMeshReference[] {
+  const accepted: Array<{ start: number; end: number; reference: AgentMeshReference }> = [];
+  const candidates = [...references]
+    .filter((reference) => reference.label)
+    .sort((left, right) => right.label.length - left.label.length);
+
+  for (const reference of candidates) {
+    for (const span of completeMentionSpans(prompt, reference.label)) {
+      if (accepted.some((match) => spansOverlap(match, span))) continue;
+      accepted.push({ ...span, reference });
+    }
+  }
+
+  return accepted
+    .sort((left, right) => left.start - right.start)
+    .map((match) => match.reference);
+}
+
+function completeMentionSpans(prompt: string, label: string): Array<{ start: number; end: number }> {
+  const spans: Array<{ start: number; end: number }> = [];
+  if (!label) return spans;
+  let searchFromIndex = 0;
+  while (searchFromIndex <= prompt.length - label.length) {
+    const start = prompt.indexOf(label, searchFromIndex);
+    if (start === -1) return spans;
+    const end = start + label.length;
+    const beforeLabel = start === 0 ? '' : prompt[start - 1];
+    const afterLabel = end >= prompt.length ? '' : prompt[end];
+    if (!isMentionContinuationCharacter(beforeLabel) && !isMentionContinuationCharacter(afterLabel)) {
+      spans.push({ start, end });
+    }
+    searchFromIndex = start + 1;
+  }
+  return spans;
+}
+
+function spansOverlap(left: { start: number; end: number }, right: { start: number; end: number }): boolean {
+  return left.start < right.end && right.start < left.end;
+}
+
+function isMentionContinuationCharacter(character: string): boolean {
+  return /[\p{L}\p{N}_-]/u.test(character);
+}
+
 function createAgentAdapter(fallback: AgentAdapter): AgentAdapter {
   const endpoint = getAgentEndpoint();
   return endpoint ? createLlmAgentClient({ endpoint }) : fallback;
@@ -830,6 +925,7 @@ function commandTitle(command: OperationCommand) {
     rotateMesh: '旋转对象',
     moveMesh: '移动对象',
     cloneMesh: '复制对象',
+    deleteMesh: '删除对象',
     setMeshScale: '缩放对象',
     clipMesh: '视觉切割',
     resetView: '重置视角',
