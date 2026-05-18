@@ -20,6 +20,7 @@ const runtimeMock = vi.hoisted(() => ({
     rotateMesh: vi.fn(),
     setMeshScale: vi.fn(),
     cloneMesh: vi.fn(),
+    removeMesh: vi.fn(),
     previewClip: vi.fn(),
     clearClip: vi.fn(),
     resetView: vi.fn(),
@@ -75,6 +76,98 @@ describe('App agent draft previews', () => {
     vi.unstubAllGlobals();
   });
 
+  it('copies the selected mesh and pastes an offset clone from the workbench keyboard shortcuts', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+    runtimeMock.runtime.cloneMesh.mockClear();
+
+    fireEvent.keyDown(window, { key: 'c', code: 'KeyC', metaKey: true });
+    fireEvent.keyDown(window, { key: 'v', code: 'KeyV', metaKey: true });
+
+    await waitFor(() => expect(runtimeMock.runtime.cloneMesh).toHaveBeenCalledTimes(1));
+    expect(runtimeMock.runtime.cloneMesh).toHaveBeenCalledWith('fan-stage', expect.objectContaining({
+      id: expect.stringContaining('fan-stage-clipboard-paste-'),
+      name: 'Blue titanium fan stage-copy-1',
+      transform: expect.objectContaining({ position: expect.any(Array) }),
+    }));
+    const clone = runtimeMock.runtime.cloneMesh.mock.calls[0][1];
+    expect(clone.transform.position[0]).toBeGreaterThan(0);
+    expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).getByText('cloneMesh')).toBeInTheDocument();
+  });
+
+  it('undoes and redoes the last workbench operation from keyboard shortcuts', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+
+    fireEvent.keyDown(window, { key: 'c', code: 'KeyC', metaKey: true });
+    fireEvent.keyDown(window, { key: 'v', code: 'KeyV', metaKey: true });
+
+    await waitFor(() => expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).getByText('cloneMesh')).toBeInTheDocument());
+
+    fireEvent.keyDown(window, { key: 'z', code: 'KeyZ', metaKey: true });
+
+    await waitFor(() => expect(screen.getByText('已撤销 cloneMesh')).toBeInTheDocument());
+    expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).queryByText('cloneMesh')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Z', code: 'KeyZ', metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(screen.getByText('已重做 cloneMesh')).toBeInTheDocument());
+    expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).getByText('cloneMesh')).toBeInTheDocument();
+  });
+
+  it('deletes the selected mesh from the workbench keyboard shortcut', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+
+    fireEvent.keyDown(window, { key: 'Delete', code: 'Delete' });
+
+    await waitFor(() => expect(runtimeMock.runtime.removeMesh).toHaveBeenCalledWith('fan-stage'));
+    expect(screen.queryByText('Blue titanium fan stage')).not.toBeInTheDocument();
+    expect(within(screen.getByText('操作时间线').closest('.history-panel') as HTMLElement).getByText('deleteMesh')).toBeInTheDocument();
+  });
+
+  it('passes copied mesh references to the AI composer for mention paste', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+
+    fireEvent.keyDown(window, { key: 'c', code: 'KeyC', metaKey: true });
+    const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.paste(input, { clipboardData: { getData: () => '' } });
+
+    expect(input).toHaveValue('@Blue titanium fan stage');
+  });
+
+  it('clears copied mesh references after workspace changes before mention paste', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+
+    render(<App />);
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
+
+    fireEvent.keyDown(window, { key: 'c', code: 'KeyC', metaKey: true });
+    runtimeMock.runtime.addMesh.mockClear();
+    fireEvent.change(screen.getByLabelText('工作区'), { target: { value: 'robotic-cell' } });
+
+    await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalledWith(expect.objectContaining({ id: 'inspection-part' })));
+
+    const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.paste(input, { clipboardData: { getData: () => '' } });
+
+    expect(input).toHaveValue('');
+  });
+
   it('previews agent rotate drafts in the viewer before confirmation', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(rotateDraft), { status: 200 })));
 
@@ -123,7 +216,7 @@ describe('App agent draft previews', () => {
     await waitFor(() => expect(runtimeMock.runtime.addMesh).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: /手动/ }));
 
-    const clipSection = screen.getByRole('region', { name: '切割预览' });
+    const clipSection = screen.getByRole('region', { name: '切割' });
     expect(within(clipSection).getByRole('button', { name: '预览切割' })).toBeInTheDocument();
     expect(within(clipSection).queryByRole('button', { name: '清除切割' })).not.toBeInTheDocument();
     expect(within(clipSection).queryByRole('button', { name: '应用切割' })).not.toBeInTheDocument();

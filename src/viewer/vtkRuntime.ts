@@ -61,6 +61,7 @@ export type VtkRuntime = {
   moveMesh: (meshId: string, offset: Vec3) => void;
   setMeshScale: (meshId: string, scale: Vec3) => void;
   cloneMesh: (sourceId: string, clone: MeshEntity) => void;
+  removeMesh: (meshId: string) => void;
   previewClip: (meshId: string, clip: VisualClip) => void;
   clearClip: (meshId: string) => void;
   resetView: (orientation?: 'isometric' | 'front' | 'top' | 'right') => void;
@@ -198,6 +199,14 @@ export function createVtkRuntime(): VtkRuntime {
       if (source?.mesh.geometry) {
         this.addMesh({ ...clone, geometry: source.mesh.geometry });
       }
+    },
+    removeMesh(meshId) {
+      const record = records.get(meshId);
+      if (!record) return;
+      const renderer = genericWindow?.getRenderer();
+      record.actors.forEach((actor) => renderer?.removeActor(actor));
+      records.delete(meshId);
+      render();
     },
     previewClip(meshId, planeDefinition) {
       const record = records.get(meshId);

@@ -127,6 +127,7 @@ export function buildProviderPayload(request) {
     modelRouterId: request.modelRouterId ?? 'default-router',
     scene: request.scene,
     conversation: request.conversation,
+    meshReferences: request.meshReferences ?? [],
     schemas: {
       agentResponse: AGENT_RESPONSE_SCHEMA,
       operationCommand: OPERATION_COMMAND_SCHEMA,

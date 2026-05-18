@@ -1,4 +1,5 @@
 import type { MeshTarget, OperationCommand, Vec3 } from '../domain/actions';
+import type { AgentMeshReference } from '../domain/protocol';
 import type { SceneState } from '../domain/scene';
 import type { AgentParser, AgentParseResult } from './types';
 
@@ -15,7 +16,7 @@ type ParserCommand = 'select' | 'move' | 'rotate' | 'clone' | 'clip';
 
 export function createRuleParser(): AgentParser {
   return {
-    parse(text, scene) {
+    parse(text, scene, meshReferences = []) {
       const normalized = text.trim();
       if (!normalized) {
         return { kind: 'unsupported', message: '请输入要执行的三维操作。' };
@@ -33,7 +34,7 @@ export function createRuleParser(): AgentParser {
       }
 
       if (isSelectCommand(normalized)) {
-        const target = resolveTarget(normalized, scene, 'select');
+        const target = resolveTarget(normalized, scene, 'select', meshReferences);
         if (!target) {
           return targetClarification(scene);
         }
@@ -48,7 +49,7 @@ export function createRuleParser(): AgentParser {
       }
 
       if (isMoveCommand(normalized)) {
-        const target = resolveTarget(normalized, scene, 'move');
+        const target = resolveTarget(normalized, scene, 'move', meshReferences);
         if (!target) {
           return targetClarification(scene);
         }
@@ -68,7 +69,7 @@ export function createRuleParser(): AgentParser {
       }
 
       if (/(旋转|转动|rotate|turn|spin)/i.test(normalized)) {
-        const target = resolveTarget(normalized, scene, 'rotate');
+        const target = resolveTarget(normalized, scene, 'rotate', meshReferences);
         if (!target) {
           return targetClarification(scene);
         }
@@ -88,7 +89,7 @@ export function createRuleParser(): AgentParser {
       }
 
       if (/(复制|克隆|copy|clone|duplicate)/i.test(normalized)) {
-        const target = resolveTarget(normalized, scene, 'clone');
+        const target = resolveTarget(normalized, scene, 'clone', meshReferences);
         if (!target) {
           return targetClarification(scene);
         }
@@ -112,7 +113,7 @@ export function createRuleParser(): AgentParser {
       }
 
       if (/(切|裁剪|剖|clip|cut|section|slice)/i.test(normalized)) {
-        const target = resolveTarget(normalized, scene, 'clip');
+        const target = resolveTarget(normalized, scene, 'clip', meshReferences);
         if (!target) {
           return targetClarification(scene);
         }
@@ -179,9 +180,19 @@ function isMoveCommand(text: string): boolean {
   return /(移动|平移|move|translate|shift)/i.test(text);
 }
 
-function resolveTarget(text: string, scene: SceneState, command: ParserCommand): MeshTarget | undefined {
+function resolveTarget(
+  text: string,
+  scene: SceneState,
+  command: ParserCommand,
+  meshReferences: readonly AgentMeshReference[],
+): MeshTarget | undefined {
   if (referencesAllVisible(text)) {
     return { source: 'allVisible' };
+  }
+
+  const mentionTarget = targetFromMention(text, meshReferences, scene);
+  if (mentionTarget) {
+    return mentionTarget;
   }
 
   const targetName = extractTargetName(text, command);
@@ -292,6 +303,74 @@ function referencesSelection(text: string): boolean {
 
 function referencesAllVisible(text: string): boolean {
   return /(整个|全部|所有|全体|全场景|全模型|全部可见|所有可见|entire|whole|all visible|all meshes|everything)/i.test(text);
+}
+
+function targetFromMention(
+  text: string,
+  meshReferences: readonly AgentMeshReference[],
+  scene: SceneState,
+): MeshTarget | undefined {
+  const matches = findCompleteMentionReferences(text, meshReferences);
+  const existingIds = matches
+    .map((reference) => reference.meshId)
+    .filter((id) => scene.meshes.some((mesh) => mesh.id === id));
+  if (existingIds.length === 0) return undefined;
+  return existingIds.length === 1 ? { meshId: existingIds[0] } : { meshIds: [...new Set(existingIds)] };
+}
+
+function findCompleteMentionReferences(
+  text: string,
+  meshReferences: readonly AgentMeshReference[],
+): AgentMeshReference[] {
+  const accepted: Array<{ start: number; end: number; reference: AgentMeshReference }> = [];
+  const candidates = [...meshReferences]
+    .filter((reference) => reference.label)
+    .sort((left, right) => right.label.length - left.label.length);
+
+  for (const reference of candidates) {
+    for (const span of completeMentionSpans(text, reference.label)) {
+      if (accepted.some((match) => spansOverlap(match, span))) continue;
+      accepted.push({ ...span, reference });
+    }
+  }
+
+  return accepted
+    .sort((left, right) => left.start - right.start)
+    .map((match) => match.reference);
+}
+
+function completeMentionSpans(text: string, label: string): Array<{ start: number; end: number }> {
+  const spans: Array<{ start: number; end: number }> = [];
+  if (!label) return spans;
+  let searchFromIndex = 0;
+  while (searchFromIndex <= text.length - label.length) {
+    const start = text.indexOf(label, searchFromIndex);
+    if (start === -1) return spans;
+    const end = start + label.length;
+    if (hasMentionStartBoundary(text, start) && hasMentionEndBoundary(text, end)) {
+      spans.push({ start, end });
+    }
+    searchFromIndex = start + 1;
+  }
+  return spans;
+}
+
+function spansOverlap(left: { start: number; end: number }, right: { start: number; end: number }): boolean {
+  return left.start < right.end && right.start < left.end;
+}
+
+function hasMentionStartBoundary(text: string, labelIndex: number): boolean {
+  if (labelIndex === 0) return true;
+  return !isMentionContinuationCharacter(text[labelIndex - 1]);
+}
+
+function hasMentionEndBoundary(text: string, afterLabelIndex: number): boolean {
+  if (afterLabelIndex >= text.length) return true;
+  return !isMentionContinuationCharacter(text[afterLabelIndex]);
+}
+
+function isMentionContinuationCharacter(character: string): boolean {
+  return /[\p{L}\p{N}_-]/u.test(character);
 }
 
 function targetFromName(name: string, scene: SceneState): MeshTarget {

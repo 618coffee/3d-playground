@@ -5,6 +5,7 @@ import { AGENT_CHAT_SESSIONS_STORAGE_KEY, appendAgentChatMessage, createAgentCha
 import { createInitialScene } from '../domain/scene';
 import type { ActionResult, MeshEntity } from '../domain/actions';
 import type { AgentResponse } from '../domain/protocol';
+import type { MeshClipboardEntry } from '../domain/meshClipboard';
 
 const actionDraft: AgentResponse = {
   kind: 'actionDraft',
@@ -256,6 +257,222 @@ describe('AgentPanel', () => {
       safetyRules: expect.any(Array),
     });
     await waitFor(() => expect(screen.getByLabelText('AI 指令输入')).toHaveValue(''));
+  });
+
+  it('pastes mesh clipboard entries as visible mentions and sends hidden mesh references', async () => {
+    clearAgentChatStorage();
+    const requestBodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ kind: 'message', text: 'ok' }), { status: 200 });
+    }));
+    const meshClipboard: MeshClipboardEntry[] = [
+      {
+        id: 'fan-stage',
+        name: 'Blue titanium fan stage',
+        bounds: [-60, -20, -35, 35, -35, 35],
+        transform: { position: [-38, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+      },
+      {
+        id: 'compressor-core',
+        name: 'Compressor core',
+        bounds: [-20, 35, -22, 22, -22, 22],
+        transform: { position: [8, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+      },
+    ];
+    const scene = createInitialScene([
+      createMesh('fan-stage', 'Blue titanium fan stage', false),
+      createMesh('compressor-core', 'Compressor core', false),
+    ]);
+
+    render(
+      <AgentPanel
+        scene={scene}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+        meshClipboard={meshClipboard}
+      />,
+    );
+
+    const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.paste(input, { clipboardData: { getData: () => '' } });
+    expect(input).toHaveValue('@Blue titanium fan stage @Compressor core');
+
+    fireEvent.change(input, { target: { value: '把 @Blue titanium fan stage 旋转 30 度，把 @Compressor core 右移 20mm' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+
+    await waitFor(() => expect(requestBodies).toHaveLength(1));
+    expect(requestBodies[0].text).toBe('把 @Blue titanium fan stage 旋转 30 度，把 @Compressor core 右移 20mm');
+    expect(requestBodies[0].meshReferences).toEqual([
+      { label: '@Blue titanium fan stage', meshId: 'fan-stage' },
+      { label: '@Compressor core', meshId: 'compressor-core' },
+    ]);
+  });
+
+  it('drops hidden mesh references that no longer exist in the current scene', async () => {
+    clearAgentChatStorage();
+    const requestBodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ kind: 'message', text: 'ok' }), { status: 200 });
+    }));
+    const meshClipboard: MeshClipboardEntry[] = [
+      {
+        id: 'fan-stage',
+        name: 'Fan',
+        bounds: [-60, -20, -35, 35, -35, 35],
+        transform: { position: [-38, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+      },
+    ];
+    const sceneWithFan = createInitialScene([createMesh('fan-stage', 'Fan', false)]);
+    const sceneWithoutFan = createInitialScene([createMesh('compressor-core', 'Compressor core', false)]);
+
+    const { rerender } = render(
+      <AgentPanel
+        scene={sceneWithFan}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+        meshClipboard={meshClipboard}
+      />,
+    );
+
+    const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.paste(input, { clipboardData: { getData: () => '' } });
+    expect(input).toHaveValue('@Fan');
+
+    rerender(
+      <AgentPanel
+        scene={sceneWithoutFan}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+        meshClipboard={meshClipboard}
+      />,
+    );
+    fireEvent.change(input, { target: { value: '@Fan' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+
+    await waitFor(() => expect(requestBodies).toHaveLength(1));
+    expect(requestBodies[0].meshReferences).toEqual([]);
+  });
+
+  it('sends only the longest complete hidden mesh reference for whitespace-prefixed mentions', async () => {
+    clearAgentChatStorage();
+    const requestBodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ kind: 'message', text: 'ok' }), { status: 200 });
+    }));
+    const meshClipboard: MeshClipboardEntry[] = [
+      {
+        id: 'fan-1',
+        name: 'Fan',
+        bounds: [-40, 40, -40, 40, -20, 20],
+        transform: { position: [0, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+      },
+      {
+        id: 'fan-stage',
+        name: 'Fan Blade',
+        bounds: [-60, -20, -35, 35, -35, 35],
+        transform: { position: [-38, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+      },
+    ];
+    const scene = createInitialScene([
+      createMesh('fan-1', 'Fan', false),
+      createMesh('fan-stage', 'Fan Blade', false),
+    ]);
+
+    render(
+      <AgentPanel
+        scene={scene}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+        meshClipboard={meshClipboard}
+      />,
+    );
+
+    const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.paste(input, { clipboardData: { getData: () => '' } });
+    expect(input).toHaveValue('@Fan @Fan Blade');
+
+    fireEvent.change(input, { target: { value: '旋转 @Fan Blade 45 度' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+
+    await waitFor(() => expect(requestBodies).toHaveLength(1));
+    expect(requestBodies[0].meshReferences).toEqual([{ label: '@Fan Blade', meshId: 'fan-stage' }]);
+  });
+
+  it.each([
+    ['letter', '把 @FanBlade 旋转 30 度'],
+    ['digit', '把 @Fan2 旋转 30 度'],
+    ['underscore', '把 @Fan_Blade 旋转 30 度'],
+    ['hyphen', '把 @Fan-Blade 旋转 30 度'],
+    ['CJK', '把 @Fan叶片 旋转 30 度'],
+  ])('does not send hidden mesh references when the visible mention is edited into a longer %s name', async (_caseName, prompt) => {
+    clearAgentChatStorage();
+    const requestBodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ kind: 'message', text: 'ok' }), { status: 200 });
+    }));
+    const meshClipboard: MeshClipboardEntry[] = [
+      {
+        id: 'fan-stage',
+        name: 'Fan',
+        bounds: [-60, -20, -35, 35, -35, 35],
+        transform: { position: [-38, 0, 0], rotationDeg: [0, 0, 0], scale: [1, 1, 1] },
+      },
+    ];
+
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+        meshClipboard={meshClipboard}
+      />,
+    );
+
+    const input = screen.getByLabelText('AI 指令输入');
+    fireEvent.paste(input, { clipboardData: { getData: () => '' } });
+    expect(input).toHaveValue('@Fan');
+
+    fireEvent.change(input, { target: { value: prompt } });
+    fireEvent.click(screen.getByRole('button', { name: '发送指令' }));
+
+    await waitFor(() => expect(requestBodies).toHaveLength(1));
+    expect(requestBodies[0].text).toBe(prompt);
+    expect(requestBodies[0].meshReferences).toEqual([]);
+  });
+
+  it('does not intercept normal textarea paste when no mesh clipboard is available', () => {
+    render(
+      <AgentPanel
+        scene={createInitialScene()}
+        selectedMeshes={[]}
+        historyEntries={[]}
+        pendingCommand={null}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByLabelText('AI 指令输入');
+    const pasteResult = fireEvent.paste(input, { clipboardData: { getData: () => 'normal text' } });
+
+    expect(pasteResult).toBe(true);
+
+    fireEvent.change(input, { target: { value: 'normal text' } });
+
+    expect(input).toHaveValue('normal text');
   });
 
   it('does not execute action drafts returned while in Ask mode', async () => {

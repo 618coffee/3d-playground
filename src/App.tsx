@@ -7,6 +7,7 @@ import { HistoryTimeline } from './components/HistoryTimeline';
 import type { ActionResult, DisplayMode, OperationCommand } from './domain/actions';
 import { createOperationExecutor } from './domain/executor';
 import { createHistoryStore, type HistoryStore } from './domain/history';
+import { createMeshClipboardEntries, defaultClonePasteOffset, type MeshClipboardEntry } from './domain/meshClipboard';
 import { cloneMeshEntity, createInitialScene, type SceneState } from './domain/scene';
 import { SAMPLE_WORKSPACES, createSampleWorkspace, type SampleWorkspaceId } from './viewer/sampleEngine';
 import { createVtkRuntime } from './viewer/vtkRuntime';
@@ -37,6 +38,7 @@ export default function App() {
   const [leftPropertiesHeight, setLeftPropertiesHeight] = useState<number | null>(null);
   const [viewOrientation, setViewOrientation] = useState<ViewOrientation>('isometric');
   const [viewScale, setViewScaleState] = useState(1);
+  const [meshClipboard, setMeshClipboard] = useState<MeshClipboardEntry[]>([]);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const leftPropertiesRef = useRef<HTMLElement | null>(null);
   const historyRef = useRef<HistoryStore>(createHistoryStore(emptyScene));
@@ -60,6 +62,7 @@ export default function App() {
     const nextScene = createInitialScene(meshes);
     runtime.clear();
     datasetsRef.current.clear();
+    setMeshClipboard([]);
     meshes.forEach((mesh) => runtime.addMesh(mesh));
     runtime.selectMeshes(nextScene.selection);
     historyRef.current = createHistoryStore(nextScene);
@@ -262,6 +265,49 @@ export default function App() {
     execute({ id: `lock-${Date.now()}`, type: 'setMeshLocked', target: { meshId }, params: { locked }, source: 'ui' });
   }, [execute]);
 
+  const copySelectionToMeshClipboard = useCallback(() => {
+    const entries = createMeshClipboardEntries(scene.meshes, scene.selection);
+    if (entries.length === 0) return false;
+    setMeshClipboard(entries);
+    setLastMessage(`已复制 ${entries.length} 个对象引用。`);
+    return true;
+  }, [scene.meshes, scene.selection]);
+
+  const pasteMeshClipboardAsClones = useCallback(() => {
+    const sceneMeshIds = new Set(scene.meshes.map((mesh) => mesh.id));
+    const validEntries = meshClipboard.filter((entry) => sceneMeshIds.has(entry.id));
+    const validIds = validEntries.map((entry) => entry.id);
+    if (validIds.length === 0) return false;
+    execute({
+      id: `clipboard-paste-${Date.now()}`,
+      type: 'cloneMesh',
+      target: { meshIds: validIds },
+      params: {
+        count: 1,
+        offset: defaultClonePasteOffset(validEntries),
+        unit: scene.unit,
+        shareGeometry: true,
+        namePattern: '{name}-copy-{n}',
+      },
+      source: 'ui',
+      rawText: 'keyboard paste clone',
+    });
+    return true;
+  }, [execute, meshClipboard, scene.meshes, scene.unit]);
+
+  const deleteSelection = useCallback(() => {
+    if (scene.selection.length === 0) return false;
+    const result = execute({
+      id: `delete-${Date.now()}`,
+      type: 'deleteMesh',
+      target: { source: 'selection' },
+      params: {},
+      source: 'ui',
+      rawText: 'keyboard delete selected meshes',
+    });
+    return result.status === 'applied';
+  }, [execute, scene.selection.length]);
+
   const undo = useCallback(() => {
     const result = historyRef.current.undo();
     restoreRuntimeScene(runtime, historyRef.current.current(), datasetsRef.current);
@@ -275,6 +321,39 @@ export default function App() {
     setPendingCommand(null);
     refreshFromHistory(result.message);
   }, [refreshFromHistory, runtime]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTextEditableElement(event.target)) return;
+      const key = event.key.toLowerCase();
+      const isModifierShortcut = (event.metaKey || event.ctrlKey) && !event.altKey;
+
+      if (isModifierShortcut && !event.shiftKey && (key === 'c' || event.code === 'KeyC')) {
+        if (copySelectionToMeshClipboard()) event.preventDefault();
+        return;
+      }
+      if (isModifierShortcut && !event.shiftKey && (key === 'v' || event.code === 'KeyV')) {
+        if (pasteMeshClipboardAsClones()) event.preventDefault();
+        return;
+      }
+      if (isModifierShortcut && (key === 'z' || event.code === 'KeyZ')) {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (isModifierShortcut && !event.shiftKey && (key === 'y' || event.code === 'KeyY')) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && (key === 'delete' || key === 'backspace' || event.code === 'Delete' || event.code === 'Backspace')) {
+        if (deleteSelection()) event.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [copySelectionToMeshClipboard, deleteSelection, pasteMeshClipboardAsClones, redo, undo]);
 
   useEffect(() => runtime.onPick(selectMesh), [runtime, selectMesh]);
 
@@ -373,6 +452,7 @@ export default function App() {
               onExecute={execute}
               onPreviewDraft={previewDraft}
               onHidePanel={() => togglePanel('right')}
+              meshClipboard={meshClipboard}
             />
           </div>
       </div>
@@ -404,6 +484,11 @@ function layoutStyle(sizes: PanelSizes, visibility: PanelVisibility, leftPropert
 
 function hiddenPanelProps(hidden: boolean) {
   return hidden ? { 'aria-hidden': true, inert: '' } : {};
+}
+
+function isTextEditableElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !== null;
 }
 
 function defaultLeftPropertiesHeight(shell: HTMLDivElement | null): number {

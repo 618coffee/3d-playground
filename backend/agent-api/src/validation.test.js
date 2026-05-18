@@ -62,6 +62,43 @@ test('preserves valid request session mode and model router metadata', () => {
   assert.equal(parsed.modelRouterId, 'default-router');
 });
 
+test('preserves valid mesh references and drops invalid references', () => {
+  const parsed = validateAgentRequest({
+    id: 'mesh-reference-request',
+    text: '旋转 @Fan 45 度',
+    scene: request.scene,
+    meshReferences: [
+      { label: '@Fan', meshId: 'fan-1' },
+      { label: '', meshId: 'fan-1' },
+      { label: '@Missing', meshId: 'missing-mesh' },
+      { label: '@Bad' },
+      null,
+    ],
+    conversation: [],
+  });
+
+  assert.deepEqual(parsed.meshReferences, [{ label: '@Fan', meshId: 'fan-1' }]);
+});
+
+test('validates deleteMesh action drafts', () => {
+  const response = validateAgentResponse({
+    kind: 'actionDraft',
+    action: {
+      type: 'deleteMesh',
+      target: { source: 'selection' },
+      params: {},
+      source: 'agent',
+      rawText: 'delete selected mesh',
+    },
+    explanation: 'Delete the selected mesh.',
+    confidence: 0.9,
+    risk: { level: 'low', summary: 'Undoable deletion.', warnings: [], requiresConfirmation: false, reversible: true },
+  }, request);
+
+  assert.equal(response.action.type, 'deleteMesh');
+  assert.deepEqual(response.action.params, {});
+});
+
 test('rejects invalid request mode and model router metadata', () => {
   assert.throws(() => validateAgentRequest({
     id: 'bad-mode',

@@ -18,6 +18,13 @@ test('provider payload includes chat mode and model router', () => {
   assert.equal(payload.modelRouterId, 'default-router');
 });
 
+test('provider payload includes mesh references', () => {
+  const meshReferences = [{ label: '@Fan', meshId: 'fan-1' }];
+  const payload = buildProviderPayload({ ...request, meshReferences });
+
+  assert.deepEqual(payload.meshReferences, meshReferences);
+});
+
 test('system prompt includes Ask Edit and Agent mode guidance', () => {
   const prompt = systemPrompt();
 

@@ -18,6 +18,7 @@ const commandTypes = [
   'rotateMesh',
   'moveMesh',
   'cloneMesh',
+  'deleteMesh',
   'setMeshScale',
   'clipMesh',
   'resetView',
@@ -85,6 +86,10 @@ export function validateOperationCommand(value: unknown): ValidationResult<Opera
     if (!isOneOf(value.params.unit, ['mm', 'cm', 'm', 'model'] as const)) return fail('Clone unit is invalid.');
     if (typeof value.params.shareGeometry !== 'boolean') return fail('Clone shareGeometry must be boolean.');
     if (!isNonEmptyString(value.params.namePattern)) return fail('Clone namePattern is required.');
+    return ok(value as OperationCommand);
+  }
+
+  if (value.type === 'deleteMesh') {
     return ok(value as OperationCommand);
   }
 

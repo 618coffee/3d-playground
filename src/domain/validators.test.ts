@@ -47,6 +47,18 @@ describe('runtime validators', () => {
     expect(validateOperationCommand(badOffset).ok).toBe(false);
   });
 
+  it('accepts mesh delete commands', () => {
+    const command: OperationCommand = {
+      id: 'delete-1',
+      type: 'deleteMesh',
+      target: { meshId: 'mesh-1' },
+      params: {},
+      source: 'ui',
+    };
+
+    expect(validateOperationCommand(command).ok).toBe(true);
+  });
+
   it('rejects LLM-like commands with arbitrary tool names or malformed params', () => {
     const arbitraryTool = {
       id: 'tool-1',

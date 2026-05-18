@@ -85,6 +85,51 @@ describe('rule parser', () => {
     expect(result.action.params).toMatchObject({ axis: 'z', angleDeg: 30 });
   });
 
+  it('resolves pasted @mentions through hidden mesh reference ids', () => {
+    const result = parser.parse('把 @Fan 旋转 45 度', scene, [{ label: '@Fan', meshId: 'compressor-core' }]);
+
+    expect(result.kind).toBe('action');
+    if (result.kind !== 'action') return;
+    expect(result.action.type).toBe('rotateMesh');
+    expect(result.action.target).toEqual({ meshId: 'compressor-core' });
+  });
+
+  it('matches overlapping @mentions only as complete visible labels', () => {
+    const result = parser.parse('旋转 @FanStage 45 度', scene, [
+      { label: '@Fan', meshId: 'fan-1' },
+      { label: '@FanStage', meshId: 'fan-stage' },
+    ]);
+
+    expect(result.kind).toBe('action');
+    if (result.kind !== 'action') return;
+    expect(result.action.type).toBe('rotateMesh');
+    expect(result.action.target).toEqual({ meshId: 'fan-stage' });
+  });
+
+  it('prefers the longest complete @mention when a shorter label is followed by whitespace', () => {
+    const result = parser.parse('旋转 @Fan Blade 45 度', scene, [
+      { label: '@Fan', meshId: 'fan-1' },
+      { label: '@Fan Blade', meshId: 'fan-stage' },
+    ]);
+
+    expect(result.kind).toBe('action');
+    if (result.kind !== 'action') return;
+    expect(result.action.type).toBe('rotateMesh');
+    expect(result.action.target).toEqual({ meshId: 'fan-stage' });
+  });
+
+  it('resolves multiple distinct complete @mentions to unique mesh ids', () => {
+    const result = parser.parse('旋转 @Fan 和 @Core 45 度', scene, [
+      { label: '@Fan', meshId: 'fan-stage' },
+      { label: '@Core', meshId: 'compressor-core' },
+    ]);
+
+    expect(result.kind).toBe('action');
+    if (result.kind !== 'action') return;
+    expect(result.action.type).toBe('rotateMesh');
+    expect(result.action.target).toEqual({ meshIds: ['fan-stage', 'compressor-core'] });
+  });
+
   it('parses Chinese named-target selection', () => {
     const result = parser.parse('选择 fan', scene);
 
