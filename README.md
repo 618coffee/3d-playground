@@ -80,16 +80,33 @@ npm run smoke:browser
 
 AI 面板会先展示解析结果、风险提示和结构化 JSON。Edit 模式一次生成一个可审阅操作草稿；Agent 模式可返回多步计划或宏草稿。切割类操作进入预览/确认语义，不直接做不可逆几何修改；真实几何切割仍是增强版能力。
 
-## 功能演示视频
+## 功能演示
 
-以下录屏可作为 GitHub README 的项目功能展示入口。GitHub 对仓库内 `.mp4` 通常会打开视频预览页；如果需要在 README 页面内直接显示播放器，可以把视频上传到 GitHub 后，用生成的 `user-attachments` 链接替换下方路径。
+GitHub README 不会在页面内直接播放仓库里的 `.mp4` 相对链接，因此这里使用 GIF 作为内联预览，并保留 MP4 作为高清录屏入口。
 
-| 功能 | 录屏 |
-| --- | --- |
-| AI 移动选中对象：沿 X 方向移动 20mm | [播放](artifacts/ai-workflow-recordings/01-move-selection-x-20mm.mp4) |
-| AI 旋转对象：将 nacelle 绕 Z 轴旋转 90 度 | [播放](artifacts/ai-workflow-recordings/02-rotate-nacelle-z-90deg.mp4) |
-| AI 复制对象：复制 stator 并沿 X 方向间隔 10mm | [播放](artifacts/ai-workflow-recordings/03-clone-stator-x-10mm.mp4) |
-| AI 切割预览：沿 Z=0 平面保留正半空间 | [播放](artifacts/ai-workflow-recordings/04-clip-all-z0-positive.mp4) |
+### AI 移动选中对象：沿 X 方向移动 20mm
+
+![AI 移动选中对象：沿 X 方向移动 20mm](artifacts/ai-workflow-recordings/01-move-selection-x-20mm.gif)
+
+[查看高清 MP4](artifacts/ai-workflow-recordings/01-move-selection-x-20mm.mp4)
+
+### AI 旋转对象：将 nacelle 绕 Z 轴旋转 90 度
+
+![AI 旋转对象：将 nacelle 绕 Z 轴旋转 90 度](artifacts/ai-workflow-recordings/02-rotate-nacelle-z-90deg.gif)
+
+[查看高清 MP4](artifacts/ai-workflow-recordings/02-rotate-nacelle-z-90deg.mp4)
+
+### AI 复制对象：复制 stator 并沿 X 方向间隔 10mm
+
+![AI 复制对象：复制 stator 并沿 X 方向间隔 10mm](artifacts/ai-workflow-recordings/03-clone-stator-x-10mm.gif)
+
+[查看高清 MP4](artifacts/ai-workflow-recordings/03-clone-stator-x-10mm.mp4)
+
+### AI 切割预览：沿 Z=0 平面保留正半空间
+
+![AI 切割预览：沿 Z=0 平面保留正半空间](artifacts/ai-workflow-recordings/04-clip-all-z0-positive.gif)
+
+[查看高清 MP4](artifacts/ai-workflow-recordings/04-clip-all-z0-positive.mp4)
 
 ## 架构
 
