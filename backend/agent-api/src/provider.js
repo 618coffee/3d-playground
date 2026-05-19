@@ -55,6 +55,8 @@ function createClient(llmConfig) {
 function providerBaseUrl(llmConfig) {
   const baseUrl = llmConfig.baseUrl.replace(/\/+$/, '');
   if (llmConfig.provider === 'azure-ai-inference') {
+    // Azure AI Inference exposes OpenAI-compatible chat completions under /openai/v1. Normalize resource,
+    // /openai, and /openai/v1 inputs so config can use the endpoint shape users copy from Azure.
     if (/\/openai\/v1$/i.test(baseUrl)) return baseUrl;
     if (/\/openai$/i.test(baseUrl)) return `${baseUrl}/v1`;
     return `${baseUrl}/openai/v1`;
@@ -65,6 +67,8 @@ function providerBaseUrl(llmConfig) {
 function providerHeaders(llmConfig) {
   if (llmConfig.accessToken) return undefined;
   if (llmConfig.authHeader === 'api-key') {
+    // The OpenAI SDK normally sends Authorization: Bearer <apiKey>. Some Azure endpoints expect api-key
+    // instead, so null explicitly removes Authorization while defaultHeaders adds the required header.
     return { Authorization: null, 'api-key': llmConfig.apiKey };
   }
   return undefined;
@@ -121,6 +125,8 @@ export function systemPrompt() {
 }
 
 export function buildProviderPayload(request) {
+  // Send schemas with every request so the model drafts against the exact contract enforced below. This
+  // keeps prompt guidance and server-side validation from drifting as OperationCommand evolves.
   return {
     text: request.text,
     mode: request.mode ?? 'edit',

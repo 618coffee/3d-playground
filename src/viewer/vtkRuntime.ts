@@ -100,6 +100,8 @@ export function createVtkRuntime(): VtkRuntime {
       emitViewportGuideChange();
       return;
     }
+    // Camera, resize, and render events can arrive in bursts while the user is interacting. Coalescing
+    // guide updates to one animation frame keeps the SVG overlays synced without excessive React work.
     if (guideUpdateFrame !== undefined) return;
     guideUpdateFrame = window.requestAnimationFrame(emitViewportGuideChange);
   };
@@ -192,6 +194,8 @@ export function createVtkRuntime(): VtkRuntime {
         this.addMesh(clone);
         return;
       }
+      // Imported meshes keep their parsed vtk dataset in memory. Clones can share that immutable dataset,
+      // which avoids re-reading user files and keeps preview cloning cheap.
       if (source?.dataset) {
         this.addMesh(clone, source.dataset);
         return;
@@ -284,6 +288,8 @@ export function createVtkRuntime(): VtkRuntime {
       const up = normalizeVec3(camera.getViewUp());
       const forward = normalizeVec3(camera.getDirectionOfProjection());
       const right = normalizeVec3(crossVec3(forward, up));
+      // Convert a screen-space drag into a camera-relative world axis. Horizontal drag follows camera up,
+      // vertical drag follows camera right, so object rotation feels consistent from every orientation.
       const rotationVector = addVec3Local(scaleVec3(up, deltaX), scaleVec3(right, deltaY));
       const dragLength = Math.hypot(rotationVector[0], rotationVector[1], rotationVector[2]);
       if (dragLength < 0.1) return undefined;
@@ -375,6 +381,8 @@ function preserveVerticalObjectScale(camera: VtkCamera | undefined, heightRatio:
     camera.setParallelScale(camera.getParallelScale() * heightRatio);
     return;
   }
+  // Perspective cameras cannot preserve apparent object size by scaling parallelScale. Adjust the view
+  // angle instead so a panel resize does not make the model jump larger or smaller on screen.
   const halfAngle = (camera.getViewAngle() * Math.PI) / 360;
   const nextAngle = (Math.atan(Math.tan(halfAngle) * heightRatio) * 360) / Math.PI;
   camera.setViewAngle(nextAngle);
@@ -432,6 +440,8 @@ function createViewportGuideSnapshot(genericWindow: VtkGenericWindow | undefined
   const framebufferHeight = framebufferSize[1];
   if (!framebufferWidth || !framebufferHeight) return null;
 
+  // vtk projects world points into framebuffer pixels with a bottom-left origin. The overlay SVG is sized
+  // in CSS pixels with a top-left origin, so both scale and Y-axis inversion happen here.
   const project = (point: Vec3): ViewportGuidePoint | null => {
     const displayPoint = renderWindow.worldToDisplay(point[0], point[1], point[2], renderer);
     if (!displayPoint.every(Number.isFinite)) return null;
@@ -475,6 +485,8 @@ function createViewportGuideSnapshot(genericWindow: VtkGenericWindow | undefined
 }
 
 function viewportGuideStep(records: Map<string, RuntimeRecord>): number {
+  // Pick a guide step from the current scene extent rather than a fixed value. That keeps the grid useful
+  // for both small imported parts and large procedural workspaces.
   let maximumExtent = 40;
   records.forEach((record) => {
     const position = record.mesh.transform.position;
@@ -537,6 +549,8 @@ function createDatasetRecord(mesh: MeshEntity, dataset: unknown): RuntimeRecord 
 }
 
 function boundsCenter(bounds: MeshEntity['bounds']): Vec3 {
+  // vtk actors rotate and scale around their origin. Use the mesh bounds center so procedural and imported
+  // geometry transform around the visible object center instead of the global scene origin.
   return [
     (bounds[0] + bounds[1]) / 2,
     (bounds[2] + bounds[3]) / 2,
@@ -545,14 +559,20 @@ function boundsCenter(bounds: MeshEntity['bounds']): Vec3 {
 }
 
 function addVec3Local(left: Vec3, right: Vec3): Vec3 {
+  // Keep vector math immutable in the runtime layer. Actor setters mutate vtk state, but helper outputs
+  // should be fresh tuples so RuntimeRecord.mesh stays safe to copy into React/domain state later.
   return [left[0] + right[0], left[1] + right[1], left[2] + right[2]];
 }
 
 function scaleVec3(vector: Vec3, factor: number): Vec3 {
+  // Used both for movement-like offsets and for normalizing drag vectors; returning a tuple preserves Vec3
+  // typing instead of widening the result to number[].
   return [vector[0] * factor, vector[1] * factor, vector[2] * factor];
 }
 
 function crossVec3(left: Vec3, right: Vec3): Vec3 {
+  // Right-handed cross product. In screenDragRotation this derives the camera-right axis from forward x up,
+  // which lets vertical pointer movement map to a stable world-space rotation direction.
   return [
     left[1] * right[2] - left[2] * right[1],
     left[2] * right[0] - left[0] * right[2],
@@ -561,6 +581,8 @@ function crossVec3(left: Vec3, right: Vec3): Vec3 {
 }
 
 function normalizeVec3(vector: number[]): Vec3 {
+  // vtk camera APIs return number[] and may produce degenerate vectors while mounting or resizing. Fall back
+  // to +X so callers always get a finite axis rather than propagating NaN through actor rotations.
   const length = Math.hypot(vector[0], vector[1], vector[2]);
   if (!Number.isFinite(length) || length === 0) return [1, 0, 0];
   return [vector[0] / length, vector[1] / length, vector[2] / length];
@@ -570,6 +592,8 @@ function actorsForGeometry(geometry: ProceduralGeometry, color: string, opacity:
   if (geometry.type === 'fanStage') {
     const actors: VtkActor[] = [];
     const mappers: VtkMapper[] = [];
+    // A fan stage is represented as one mesh record but many vtk actors. Keep all blade actors under the
+    // same record so selection styling, visibility, transforms, and clipping apply as one object.
     for (let index = 0; index < geometry.bladeCount; index += 1) {
       const angle = (Math.PI * 2 * index) / geometry.bladeCount;
       const y = Math.cos(angle) * (geometry.radius + geometry.bladeLength / 2);

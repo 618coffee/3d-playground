@@ -45,6 +45,14 @@ export function validateAgentResponse(input, request) {
     throw new HttpError(502, 'invalid_agent_response', 'Provider returned a non-object response.');
   }
 
+  // AgentResponse.kind is the top-level contract between the provider and the UI:
+  // message: plain assistant text.
+  // clarification: ask the user for missing details before drafting an operation.
+  // actionDraft: one executable operation for user review.
+  // actionPlan: reviewed multi-step operations for Agent mode.
+  // sceneAnswer: read-only scene Q&A with referenced mesh ids.
+  // macroDraft: reusable multi-step operation draft.
+  // backendJobDraft: future local-worker work that the browser cannot run.
   const kind = enumValue(response.kind, ['message', 'clarification', 'actionDraft', 'actionPlan', 'sceneAnswer', 'macroDraft', 'backendJobDraft'], 'kind');
   if (kind === 'message') {
     return {
@@ -54,6 +62,8 @@ export function validateAgentResponse(input, request) {
   }
 
   if (kind === 'clarification') {
+    // Some providers over-clarify simple plane cuts even when the request includes enough plane context.
+    // Recover those into reversible visual clips only when the text is clearly viewer-safe.
     const viewerClipDraft = normalizeSimpleGeometryCutDraft(request);
     if (viewerClipDraft) return viewerClipDraft;
 
@@ -85,6 +95,8 @@ export function validateAgentResponse(input, request) {
 
   if (kind === 'backendJobDraft') {
     const jobKind = enumValue(response.jobKind, ['geometryCut', 'meshing', 'solverRun', 'resultSummary'], 'jobKind');
+    // A provider may classify a simple plane cut as a geometry backend job. If the request does not ask for
+    // permanent/baked output, downgrade it to the reversible visual clip flow the viewer can preview now.
     const viewerClipDraft = jobKind === 'geometryCut' ? normalizeSimpleGeometryCutDraft(request) : undefined;
     if (viewerClipDraft) return viewerClipDraft;
 
@@ -435,6 +447,8 @@ function inferColorTarget(request, preferSelection) {
   const selectedIds = new Set(request.scene.selection ?? []);
   const visibleMeshes = request.scene.meshes.filter((mesh) => mesh.visible !== false);
   const selectedMeshes = visibleMeshes.filter((mesh) => selectedIds.has(mesh.id));
+  // Color targeting is safest when scoped by the user's wording. For selected-color requests, search the
+  // current selection first; otherwise a similarly colored visible mesh elsewhere could be chosen instead.
   const searchMeshes = preferSelection && selectedMeshes.length > 0 ? selectedMeshes : visibleMeshes;
   const matches = searchMeshes.filter((mesh) => colorLabels.includes(mesh.colorLabel));
   if (matches.length === 1) return { meshId: matches[0].id };
@@ -669,6 +683,8 @@ function normalizeOperationCommand(input) {
   const commandEntries = Object.entries(input.commands).filter(([type]) => COMMAND_TYPES.includes(type));
   if (commandEntries.length !== 1) return input;
 
+  // Earlier prompts produced { common, commands: { rotateMesh: ... } }. Normalize that shape internally so
+  // old model outputs remain recoverable while the public contract stays the flat OperationCommand object.
   const [type, commandValue] = commandEntries[0];
   const command = isRecord(commandValue) ? commandValue : {};
   const common = isRecord(input.common) ? input.common : {};

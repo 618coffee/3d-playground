@@ -54,6 +54,8 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
   const lastPendingActionIdRef = useRef<string | null>(null);
   const cancelledPendingActionIdRef = useRef<string | null>(null);
   const activeSession = getActiveSession(sessionState);
+  // Cancelling an agent preview asks the parent to clear pendingCommand, but React may render once before
+  // that prop updates. Mask the cancelled id locally so the stale preview cannot show actionable buttons.
   const effectivePendingCommand = pendingCommand?.id === cancelledPendingActionIdRef.current ? null : pendingCommand;
   const activeResponse = useMemo(() => activeSession.messages.find((message) => message.id === activeResponseMessageId)?.response ?? null, [activeResponseMessageId, activeSession.messages]);
 
@@ -96,6 +98,8 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
   };
 
   const invalidateInFlightRequest = () => {
+    // AbortController stops cooperative requests, but a backend or browser can still settle late. The
+    // serial guard makes stale responses no-ops even when abort is ignored somewhere upstream.
     requestSerialRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -212,6 +216,8 @@ export function AgentPanel({ scene, selectedMeshes = [], historyEntries, pending
     const shouldCancelPendingForNewRequest = Boolean(activeResponseMessageId) && effectivePendingCommand?.source === 'agent';
     const pendingCommandForRequest = shouldCancelPendingForNewRequest ? null : effectivePendingCommand;
     if (shouldCancelPendingForNewRequest) cancelPendingPreview();
+    // Mesh references come from the clipboard draft, not from free text parsing. Only send labels that are
+    // still present as complete @mentions so stale clipboard entries cannot silently retarget a request.
     const meshReferencesForRequest = filterActiveMeshReferences(prompt, draftMeshReferences, scene);
 
     const requestSerial = requestSerialRef.current + 1;
@@ -809,6 +815,8 @@ function findCompleteMentionReferences(prompt: string, references: AgentMeshRefe
     .filter((reference) => reference.label)
     .sort((left, right) => right.label.length - left.label.length);
 
+  // Match longer labels first and reject overlapping spans. This lets "@Rotor Blade" win over "@Rotor"
+  // while still allowing multiple distinct mesh mentions in the same prompt.
   for (const reference of candidates) {
     for (const span of completeMentionSpans(prompt, reference.label)) {
       if (accepted.some((match) => spansOverlap(match, span))) continue;

@@ -82,6 +82,8 @@ export default function App() {
 
   const execute = useCallback((command: OperationCommand): ActionResult => {
     if (pendingCommand?.source === 'agent' && pendingCommand.id === command.id && isRuntimePreviewCommand(pendingCommand)) {
+      // Draft previews have already mutated live vtk actors. Restore the last committed scene first so
+      // applying the confirmed command records exactly one transform instead of stacking on the preview.
       restoreRuntimeScene(runtime, historyRef.current.current(), datasetsRef.current);
     }
     const executor = createOperationExecutor(historyRef.current, runtime);
@@ -110,6 +112,8 @@ export default function App() {
 
   const cancelPending = useCallback(() => {
     if (pendingCommand && isRuntimePreviewCommand(pendingCommand)) {
+      // Draft previews are intentionally runtime-only. Restoring from history discards temporary actors or
+      // transforms without creating a new undo entry or changing the committed SceneState.
       restoreRuntimeScene(runtime, historyRef.current.current(), datasetsRef.current);
     }
     setPendingCommand(null);
@@ -121,6 +125,8 @@ export default function App() {
       restoreRuntimeScene(runtime, historyRef.current.current(), datasetsRef.current);
     }
     if (command.type === 'clipMesh') {
+      // Clip previews go through the executor instead of the local transform preview path because clipping
+      // has target validation, warning text, and its own confirmation semantics.
       execute(command);
       return;
     }
@@ -566,6 +572,8 @@ function multiplyVec3(vector: [number, number, number], factor: number): [number
 }
 
 function copyDatasetRefsForClones(before: SceneState, after: SceneState, datasets: Map<string, unknown>): void {
+  // Imported mesh clones share the parsed vtk dataset held outside SceneState. History only stores the new
+  // MeshEntity, so mirror the dataset reference here after the executor creates clone ids.
   const beforeIds = new Set(before.meshes.map((mesh) => mesh.id));
   const importedSources = before.meshes.filter((mesh) => datasets.has(mesh.id));
   after.meshes.forEach((mesh) => {

@@ -26,6 +26,8 @@ export type ViewerOperationExecutor = OperationExecutor;
 export function createOperationExecutor(history: HistoryStore, runtime?: ViewerRuntimePort): ViewerOperationExecutor {
   return {
     execute(command) {
+      // Validate the command contract before touching vtk.js. Agent responses are untrusted input, so
+      // malformed payloads must fail as ActionResult data instead of leaving partial viewer mutations.
       const shapeValidation = validateOperationCommand(command);
       if (!shapeValidation.ok) return failed(getActionId(command), shapeValidation.error);
       const scene = history.current();
@@ -41,6 +43,8 @@ export function createOperationExecutor(history: HistoryStore, runtime?: ViewerR
         const clip = commandToClip(command);
         targetIds.forEach((meshId) => runtime?.previewClip?.(meshId, clip));
         const requiresPreviewConfirmation = command.source !== 'ui';
+        // UI previews are already a direct user gesture, but agent previews need an explicit review step.
+        // Keep them out of history until the user confirms after inspecting the viewport.
         return {
           actionId: command.id,
           status: 'preview',
@@ -56,6 +60,8 @@ export function createOperationExecutor(history: HistoryStore, runtime?: ViewerR
           const clip = commandToClip(command);
           targetIds.forEach((meshId) => runtime?.previewClip?.(meshId, clip));
         }
+        // Confirmation requests may still paint a temporary preview. Returning preview status here keeps
+        // the serializable scene and undo stack unchanged until the caller resubmits with confirmed=true.
         return {
           actionId: command.id,
           status: 'preview',
@@ -92,6 +98,8 @@ function applyToScene(
   targetIds: string[],
   runtime?: ViewerRuntimePort,
 ): SceneState {
+  // Runtime calls mutate live vtk.js actors for immediate feedback. The copied SceneState returned from
+  // this function is what history, undo/redo, and chat context use as the durable source of truth.
   if (command.type === 'rotateMesh') {
     return {
       ...scene,
@@ -257,6 +265,8 @@ function updateSelection(current: string[], targetIds: string[], mode: 'replace'
 }
 
 function historyPolicy(command: OperationCommand, scene: SceneState, nextScene: SceneState): { mode: 'record' | 'update' | 'ignore'; message?: string } {
+  // Pointer-drag rotation emits many tiny commands with the same semantic intent. Updating the current
+  // entry makes undo feel like one drag operation instead of dozens of microscopic rotations.
   if (command.type === 'rotateMesh' && command.source === 'ui' && command.rawText === 'viewport drag rotate') return { mode: 'update' };
   if (command.type === 'selectMesh' && sameStringList(scene.selection, nextScene.selection)) {
     return { mode: 'ignore', message: '选择未变化。' };
@@ -331,6 +341,8 @@ function canTargetHidden(command: OperationCommand): boolean {
 }
 
 function commandToClip(command: Extract<OperationCommand, { type: 'clipMesh' }>): VisualClip {
+  // vtk clipping planes always keep the positive side of the plane normal. For a negative-side request,
+  // flip the normal before it reaches vtk so UI labels and rendered geometry stay aligned.
   return {
     plane: {
       origin: [...command.params.plane.origin],
