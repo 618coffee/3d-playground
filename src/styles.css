@@ -607,6 +607,18 @@ label input[type='file'] {
   border-radius: 6px;
 }
 
+.object-rename-input {
+  width: 100%;
+  height: 28px;
+  min-width: 0;
+  padding: 0 6px;
+  border-radius: 6px;
+}
+
+.object-edit-shell {
+  cursor: text;
+}
+
 .object-row.selected .object-select-button {
   background: #123149;
   border-color: #1a89c1;
@@ -1289,6 +1301,16 @@ label input[type='file'] {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.mesh-name-input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  font-weight: 700;
 }
 
 .property-grid {

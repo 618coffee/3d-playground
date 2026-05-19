@@ -266,6 +266,7 @@ describe('App agent draft previews', () => {
 
     expect(shell.style.getPropertyValue('--left-properties-height')).toBe('50%');
     expect(within(stack).getByText('Blue titanium fan stage')).toBeInTheDocument();
+    expect(within(stack).queryByRole('textbox', { name: '对象名称' })).not.toBeInTheDocument();
     const resizeHandle = screen.getByRole('separator', { name: '调整属性面板高度' });
 
     fireEvent.mouseDown(resizeHandle, { clientY: 300 });

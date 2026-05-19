@@ -24,6 +24,7 @@ const commandTypes = [
   'resetView',
   'setMeshVisibility',
   'setMeshLocked',
+  'renameMesh',
   'setDisplayMode',
   'importMesh',
 ] as const;
@@ -111,6 +112,10 @@ export function validateOperationCommand(value: unknown): ValidationResult<Opera
 
   if (value.type === 'setMeshLocked') {
     return typeof value.params.locked === 'boolean' ? ok(value as OperationCommand) : fail('Locked value must be boolean.');
+  }
+
+  if (value.type === 'renameMesh') {
+    return isNonEmptyString(value.params.name) ? ok(value as OperationCommand) : fail('Rename name is required.');
   }
 
   return fail('Unsupported command type.');

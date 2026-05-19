@@ -939,6 +939,7 @@ function commandTitle(command: OperationCommand) {
     resetView: '重置视角',
     setMeshVisibility: '切换可见性',
     setMeshLocked: '锁定状态',
+    renameMesh: '重命名对象',
     setDisplayMode: '显示模式',
     importMesh: '导入模型',
   };
@@ -958,6 +959,7 @@ function buildActionSummary(command: OperationCommand, sceneMeshes: MeshEntity[]
   if (command.type === 'setDisplayMode') rows.push(['参数', command.params.mode]);
   if (command.type === 'setMeshVisibility') rows.push(['参数', command.params.visible ? '显示' : '隐藏']);
   if (command.type === 'setMeshLocked') rows.push(['参数', command.params.locked ? '锁定' : '解锁']);
+  if (command.type === 'renameMesh') rows.push(['参数', command.params.name]);
   if (command.type === 'setMeshScale') rows.push(['参数', command.params.scale.join(', ')]);
 
   return rows;

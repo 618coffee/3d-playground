@@ -307,6 +307,76 @@ describe('operation executor', () => {
     expect(history.entries()).toHaveLength(4);
   });
 
+  it('renames a mesh and records the command in history', () => {
+    const history = createHistoryStore(createInitialScene([mesh]));
+    const executor = createOperationExecutor(history);
+    const command = {
+      id: 'rename-1',
+      type: 'renameMesh',
+      target: { meshId: 'fan-1' },
+      params: { name: 'Primary fan' },
+      source: 'ui',
+      rawText: 'rename fan-1',
+    } as unknown as OperationCommand;
+
+    const result = executor.execute(command);
+
+    expect(result.status).toBe('applied');
+    expect(result.affectedMeshIds).toEqual(['fan-1']);
+    expect(result.message).toBe('已重命名对象。');
+    expect(history.current().meshes[0].name).toBe('Primary fan');
+    expect(history.entries().map((entry) => entry.command)).toEqual([command]);
+  });
+
+  it('trims rename input before storing it', () => {
+    const history = createHistoryStore(createInitialScene([mesh]));
+    const executor = createOperationExecutor(history);
+
+    executor.execute({
+      id: 'rename-trim',
+      type: 'renameMesh',
+      target: { meshId: 'fan-1' },
+      params: { name: '  Trimmed fan  ' },
+      source: 'ui',
+    } as unknown as OperationCommand);
+
+    expect(history.current().meshes[0].name).toBe('Trimmed fan');
+  });
+
+  it('skips unchanged rename entries', () => {
+    const history = createHistoryStore(createInitialScene([mesh]));
+    const executor = createOperationExecutor(history);
+
+    const result = executor.execute({
+      id: 'rename-same',
+      type: 'renameMesh',
+      target: { meshId: 'fan-1' },
+      params: { name: ' turbofan fan ' },
+      source: 'ui',
+    } as unknown as OperationCommand);
+
+    expect(result.message).toBe('名称未变化。');
+    expect(history.current().meshes[0].name).toBe('turbofan fan');
+    expect(history.entries()).toHaveLength(0);
+  });
+
+  it('renames locked meshes as metadata operations', () => {
+    const locked = { ...mesh, locked: true };
+    const history = createHistoryStore(createInitialScene([locked]));
+    const executor = createOperationExecutor(history);
+
+    const result = executor.execute({
+      id: 'rename-locked',
+      type: 'renameMesh',
+      target: { meshId: 'fan-1' },
+      params: { name: 'Locked fan label' },
+      source: 'ui',
+    } as unknown as OperationCommand);
+
+    expect(result.status).toBe('applied');
+    expect(history.current().meshes[0].name).toBe('Locked fan label');
+  });
+
   it('can select hidden objects and hide locked objects without unlocking them', () => {
     const hidden = { ...mesh, id: 'hidden-1', name: 'hidden mesh', visible: false, selected: false };
     const locked = { ...mesh, id: 'locked-1', name: 'locked mesh', locked: true, selected: false };

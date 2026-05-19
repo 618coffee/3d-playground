@@ -59,6 +59,24 @@ describe('runtime validators', () => {
     expect(validateOperationCommand(command).ok).toBe(true);
   });
 
+  it('accepts mesh rename commands and rejects blank names', () => {
+    const command = {
+      id: 'rename-1',
+      type: 'renameMesh',
+      target: { meshId: 'mesh-1' },
+      params: { name: 'Primary fan' },
+      source: 'ui',
+    };
+    const blankName = {
+      ...command,
+      id: 'rename-blank',
+      params: { name: '   ' },
+    };
+
+    expect(validateOperationCommand(command).ok).toBe(true);
+    expect(validateOperationCommand(blankName).ok).toBe(false);
+  });
+
   it('rejects LLM-like commands with arbitrary tool names or malformed params', () => {
     const arbitraryTool = {
       id: 'tool-1',

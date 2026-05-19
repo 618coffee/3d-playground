@@ -226,6 +226,14 @@ function applyToScene(
     };
   }
 
+  if (command.type === 'renameMesh') {
+    const name = command.params.name.trim();
+    return {
+      ...scene,
+      meshes: scene.meshes.map((mesh) => (targetIds.includes(mesh.id) ? { ...mesh, name } : mesh)),
+    };
+  }
+
   if (command.type === 'setDisplayMode') {
     runtime?.setDisplayMode?.(command.params.mode);
     return { ...scene, displayMode: command.params.mode };
@@ -271,11 +279,18 @@ function historyPolicy(command: OperationCommand, scene: SceneState, nextScene: 
   if (command.type === 'selectMesh' && sameStringList(scene.selection, nextScene.selection)) {
     return { mode: 'ignore', message: '选择未变化。' };
   }
+  if (command.type === 'renameMesh' && sameMeshNames(scene.meshes, nextScene.meshes)) {
+    return { mode: 'ignore', message: '名称未变化。' };
+  }
   return { mode: 'record' };
 }
 
 function sameStringList(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function sameMeshNames(left: MeshEntity[], right: MeshEntity[]): boolean {
+  return left.length === right.length && left.every((mesh, index) => mesh.id === right[index]?.id && mesh.name === right[index]?.name);
 }
 
 function rotateVector(rotation: Vec3, axis: 'x' | 'y' | 'z' | Vec3, angleDeg: number): Vec3 {
@@ -327,6 +342,7 @@ function successMessage(command: OperationCommand): string {
   if (command.type === 'clipMesh') return command.params.mode === 'clearVisualClip' ? '已清除视觉切割。' : '已应用视觉切割。';
   if (command.type === 'setMeshVisibility') return command.params.visible ? '已显示对象。' : '已隐藏对象。';
   if (command.type === 'setMeshLocked') return command.params.locked ? '已锁定对象。' : '已解锁对象。';
+  if (command.type === 'renameMesh') return '已重命名对象。';
   if (command.type === 'setDisplayMode') return `显示模式已切换为 ${command.params.mode}。`;
   if (command.type === 'importMesh') return `已导入 ${command.params.mesh.name}。`;
   return '操作已应用。';
@@ -337,7 +353,7 @@ function isSceneWideCommand(command: OperationCommand): boolean {
 }
 
 function canTargetHidden(command: OperationCommand): boolean {
-  return command.type === 'selectMesh' || command.type === 'setMeshVisibility' || command.type === 'setMeshLocked';
+  return command.type === 'selectMesh' || command.type === 'setMeshVisibility' || command.type === 'setMeshLocked' || command.type === 'renameMesh';
 }
 
 function commandToClip(command: Extract<OperationCommand, { type: 'clipMesh' }>): VisualClip {
@@ -400,7 +416,7 @@ function validateCommand(command: OperationCommand, scene: SceneState, targetIds
 }
 
 function canOperateOnLocked(command: OperationCommand): boolean {
-  return command.type === 'selectMesh' || command.type === 'setMeshVisibility' || command.type === 'setMeshLocked';
+  return command.type === 'selectMesh' || command.type === 'setMeshVisibility' || command.type === 'setMeshLocked' || command.type === 'renameMesh';
 }
 
 function isValidVec3(vector: Vec3): boolean {

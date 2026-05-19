@@ -271,6 +271,10 @@ export default function App() {
     execute({ id: `lock-${Date.now()}`, type: 'setMeshLocked', target: { meshId }, params: { locked }, source: 'ui' });
   }, [execute]);
 
+  const renameMesh = useCallback((meshId: string, name: string) => {
+    execute({ id: `rename-${Date.now()}`, type: 'renameMesh', target: { meshId }, params: { name }, source: 'ui', rawText: `rename ${meshId}` });
+  }, [execute]);
+
   const copySelectionToMeshClipboard = useCallback(() => {
     const entries = createMeshClipboardEntries(scene.meshes, scene.selection);
     if (entries.length === 0) return false;
@@ -397,6 +401,7 @@ export default function App() {
                 onSelect={selectMeshes}
                 onToggleVisibility={toggleVisibility}
                 onToggleLock={toggleLock}
+                onRename={renameMesh}
                 onHidePanel={() => togglePanel('left')}
               />
             </div>
@@ -409,7 +414,7 @@ export default function App() {
                 </button>
               </div>
               <div className={`left-properties-content ${leftPropertiesOpen ? 'is-open' : 'is-collapsed'}`} role="region" aria-label="选中对象属性" aria-hidden={!leftPropertiesOpen}>
-                <PropertiesPanel mesh={selectedMesh} selectedMeshes={selectedMeshes} />
+                <PropertiesPanel mesh={selectedMesh} selectedMeshes={selectedMeshes} onRename={renameMesh} />
               </div>
             </section>
             <div className="panel-resize-handle resize-handle-right" role="separator" aria-orientation="vertical" title="调整对象树宽度" onMouseDown={(event) => startPanelResize('left', event)} />

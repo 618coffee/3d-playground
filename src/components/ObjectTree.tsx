@@ -1,4 +1,4 @@
-import { type MouseEvent, useMemo, useState } from 'react';
+import { type KeyboardEvent, type MouseEvent, useMemo, useState } from 'react';
 import { Box, Eye, EyeOff, Lock, LockOpen, PanelLeftClose, Search } from 'lucide-react';
 import type { MeshEntity } from '../domain/actions';
 
@@ -10,12 +10,15 @@ type ObjectTreeProps = {
   onSelect: (meshIds: string[], mode?: SelectionMode) => void;
   onToggleVisibility?: (meshId: string, visible: boolean) => void;
   onToggleLock?: (meshId: string, locked: boolean) => void;
+  onRename?: (meshId: string, name: string) => void;
   onHidePanel?: () => void;
 };
 
-export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, onToggleLock, onHidePanel }: ObjectTreeProps) {
+export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, onToggleLock, onRename, onHidePanel }: ObjectTreeProps) {
   const [query, setQuery] = useState('');
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+  const [editingMeshId, setEditingMeshId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredMeshes = useMemo(() => {
     if (!normalizedQuery) return meshes;
@@ -42,6 +45,39 @@ export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, on
       onSelect([mesh.id], 'replace');
     }
     setLastSelectedId(mesh.id);
+  };
+
+  const startRename = (mesh: MeshEntity, event: MouseEvent<HTMLElement>) => {
+    if (!onRename) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setEditingMeshId(mesh.id);
+    setEditingName(mesh.name);
+  };
+
+  const commitRename = (mesh: MeshEntity) => {
+    const name = editingName.trim();
+    setEditingMeshId(null);
+    setEditingName('');
+    if (!name || name === mesh.name) return;
+    onRename?.(mesh.id, name);
+  };
+
+  const cancelRename = () => {
+    setEditingMeshId(null);
+    setEditingName('');
+  };
+
+  const handleRenameKeyDown = (mesh: MeshEntity, event: KeyboardEvent<HTMLInputElement>) => {
+    event.stopPropagation();
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitRename(mesh);
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelRename();
+    }
   };
 
   return (
@@ -84,12 +120,37 @@ export function ObjectTree({ meshes, selection, onSelect, onToggleVisibility, on
               role="option"
               aria-selected={selection.includes(mesh.id)}
             >
-              <button type="button" className="object-select-button" onClick={(event) => handleSelect(mesh, event)} aria-label={getSelectLabel(mesh)}>
-                <Box size={16} aria-hidden="true" />
-                <span className="swatch" style={{ background: mesh.color }} aria-hidden="true" />
-                <span className="object-name">{mesh.name}</span>
-                <span className="object-meta">{formatMeshStats(mesh)}</span>
-              </button>
+              {editingMeshId === mesh.id ? (
+                <div className="object-select-button object-edit-shell">
+                  <Box size={16} aria-hidden="true" />
+                  <span className="swatch" style={{ background: mesh.color }} aria-hidden="true" />
+                  <input
+                    className="object-rename-input"
+                    aria-label={`重命名 ${mesh.name}`}
+                    value={editingName}
+                    autoFocus
+                    onChange={(event) => setEditingName(event.target.value)}
+                    onBlur={() => commitRename(mesh)}
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => handleRenameKeyDown(mesh, event)}
+                  />
+                  <span className="object-meta">{formatMeshStats(mesh)}</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="object-select-button"
+                  onClick={(event) => handleSelect(mesh, event)}
+                  onDoubleClick={(event) => startRename(mesh, event)}
+                  aria-label={getSelectLabel(mesh)}
+                  title={onRename ? '双击重命名' : undefined}
+                >
+                  <Box size={16} aria-hidden="true" />
+                  <span className="swatch" style={{ background: mesh.color }} aria-hidden="true" />
+                  <span className="object-name">{mesh.name}</span>
+                  <span className="object-meta">{formatMeshStats(mesh)}</span>
+                </button>
+              )}
               <button
                 type="button"
                 className={`object-control ${mesh.visible ? 'active' : ''}`}

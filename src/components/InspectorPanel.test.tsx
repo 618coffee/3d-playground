@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { InspectorPanel } from './InspectorPanel';
+import { InspectorPanel, PropertiesPanel } from './InspectorPanel';
 import type { ActionResult, MeshEntity, OperationCommand } from '../domain/actions';
 import { createInitialScene } from '../domain/scene';
 
@@ -359,5 +359,21 @@ describe('InspectorPanel', () => {
     rerender(<InspectorPanel {...props} pendingCommand={{ ...cloneCommand, source: 'ui' }} />);
 
     expect(screen.getByRole('button', { name: /确认复制/ })).toBeInTheDocument();
+  });
+});
+
+describe('PropertiesPanel', () => {
+  it('renames the selected mesh from the title field', () => {
+    const rename = vi.fn();
+    render(<PropertiesPanel mesh={mesh} selectedMeshes={[mesh]} onRename={rename} />);
+
+    expect(screen.queryByRole('textbox', { name: '对象名称' })).not.toBeInTheDocument();
+    fireEvent.doubleClick(screen.getByText('turbofan fan'));
+
+    const input = screen.getByRole('textbox', { name: '对象名称' });
+    fireEvent.change(input, { target: { value: 'Renamed fan' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(rename).toHaveBeenCalledWith('fan-1', 'Renamed fan');
   });
 });

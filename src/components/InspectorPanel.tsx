@@ -63,10 +63,41 @@ function PendingActionCard({ command, onConfirm, onCancel }: { command: Operatio
   );
 }
 
-export function PropertiesPanel({ mesh, selectedMeshes }: { mesh?: MeshEntity; selectedMeshes: MeshEntity[] }) {
+type PropertiesPanelProps = {
+  mesh?: MeshEntity;
+  selectedMeshes: MeshEntity[];
+  onRename?: (meshId: string, name: string) => void;
+};
+
+export function PropertiesPanel({ mesh, selectedMeshes, onRename }: PropertiesPanelProps) {
+  const [draftName, setDraftName] = useState(mesh?.name ?? '');
+  const [editingName, setEditingName] = useState(false);
+
+  useEffect(() => {
+    setDraftName(mesh?.name ?? '');
+    setEditingName(false);
+  }, [mesh?.id, mesh?.name]);
+
   if (!mesh) {
     return <div className="empty-panel roomy">请选择对象，或从对象树里点选一个 mesh。</div>;
   }
+
+  const canRename = selectedMeshes.length <= 1 && Boolean(onRename);
+  const startRename = () => {
+    if (!canRename) return;
+    setDraftName(mesh.name);
+    setEditingName(true);
+  };
+  const commitRename = () => {
+    const name = draftName.trim();
+    setEditingName(false);
+    if (!name) {
+      setDraftName(mesh.name);
+      return;
+    }
+    if (name === mesh.name) return;
+    onRename?.(mesh.id, name);
+  };
 
   const rows = [
     ['格式', mesh.sourceFormat],
@@ -86,7 +117,28 @@ export function PropertiesPanel({ mesh, selectedMeshes }: { mesh?: MeshEntity; s
       <div className="object-title-row">
         <span className="swatch large" style={{ background: mesh.color }} />
         <div>
-          <strong>{selectedMeshes.length > 1 ? `${selectedMeshes.length} 个对象已选中` : mesh.name}</strong>
+          {canRename && editingName ? (
+            <input
+              className="mesh-name-input"
+              aria-label="对象名称"
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  commitRename();
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setDraftName(mesh.name);
+                  setEditingName(false);
+                }
+              }}
+            />
+          ) : (
+            <strong onDoubleClick={startRename} title={canRename ? '双击重命名' : undefined}>{selectedMeshes.length > 1 ? `${selectedMeshes.length} 个对象已选中` : mesh.name}</strong>
+          )}
           <span>{mesh.id}</span>
         </div>
       </div>

@@ -165,6 +165,11 @@ export type OperationCommand =
       params: { locked: boolean };
     })
   | (CommandMeta & {
+      type: 'renameMesh';
+      target: MeshTarget;
+      params: { name: string };
+    })
+  | (CommandMeta & {
       type: 'setDisplayMode';
       target: { scope: 'viewer' };
       params: { mode: DisplayMode };
