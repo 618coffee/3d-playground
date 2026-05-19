@@ -10,7 +10,7 @@ The workbench now has shared runtime protocol validation, async agent adapters, 
 
 - The default frontend path now calls `VITE_AGENT_API_URL || '/api/agent/respond'`. With Vite, `/api` is proxied to `http://127.0.0.1:8787`.
 - The rule parser adapter still exists as an offline implementation path, but the default app does not automatically fall back to it when the local API is unreachable; network/API failures are shown in the AI panel.
-- `AGENT_MODE=mock` is the default backend mode. `AGENT_MODE=llm` supports OpenAI-compatible, Azure OpenAI, and Azure AI Inference / AI Services endpoints.
+- The backend now always uses the LLM provider path. It supports OpenAI-compatible, Azure OpenAI, and Azure AI Inference / AI Services endpoints.
 - For Azure AI Foundry model deployments in this repo, use the AI Services/Cognitive Services model endpoint, such as `https://<resource>.cognitiveservices.azure.com`; do not use the Foundry project endpoint as the chat completions base URL.
 - `backendJobDraft` and `BackendJob` types are protocol/UI foundations only. No queue, worker, solver, or geometry-processing backend is currently started.
 - Detailed implementation notes are now kept in `docs/designs/agent-runtime-implementation.md`.
@@ -229,13 +229,13 @@ Implemented in `src/agent/context.ts`; tests assert that raw geometry and import
 
 ### Phase 4: Backend LLM Endpoint
 
-Status: implemented as local API skeleton with mock, OpenAI-compatible, Azure OpenAI, and Azure AI Inference provider modes.
+Status: implemented as local API skeleton with OpenAI-compatible, Azure OpenAI, and Azure AI Inference provider modes.
 
 - Add a small local backend/proxy endpoint such as `POST /api/agent/respond`.
 - Containerize the backend so it can run in Docker Desktop via Docker Compose.
 - Store provider credentials in server environment variables only.
 - Use structured output/tool schema so the model returns one of the allowed response shapes.
-- Include a mock mode for tests and local demos without credentials.
+- Require explicit LLM provider configuration for local demos.
 - Return command drafts, clarification requests, messages, or future action plans rather than executing commands directly.
 
 Implemented under `backend/agent-api/`. The backend normalizes and validates all responses before returning them to the browser.
@@ -262,7 +262,7 @@ npm run dev
 
 `npm run dev` uses the Vite dev proxy to forward `/api/agent/respond` to `http://127.0.0.1:8787`, so no frontend environment variable is required for the default Docker-backed local workflow.
 
-Default `AGENT_MODE=mock` needs no credentials. To use an OpenAI-compatible endpoint, set `AGENT_MODE=llm`, `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` in local environment variables or `.env`. For Azure AI Inference / AI Services, set `LLM_PROVIDER=azure-ai-inference` and use the Cognitive Services model endpoint; the provider client appends `/openai/v1` when needed.
+To use an OpenAI-compatible endpoint, set `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` in local environment variables or `.env`. For Azure AI Inference / AI Services, set `LLM_PROVIDER=azure-ai-inference` and use the Cognitive Services model endpoint; the provider client appends `/openai/v1` when needed.
 
 ### Phase 5: AI Review UI
 

@@ -23,15 +23,12 @@ const sampleScene = {
 
 const request = validateAgentRequest({
   id: 'smoke-1',
-  text: '把当前对象绕 Z 轴旋转 30 度，然后重置视角',
+  text: '当前选中了什么？',
+  mode: 'ask',
   scene: sampleScene,
   conversation: [],
 });
 
-const response = await respondToAgentRequest(request, { ...readConfig({ AGENT_MODE: 'mock' }), agentMode: 'mock' });
+const response = await respondToAgentRequest(request, readConfig());
 
-if (response.kind !== 'actionPlan') {
-  throw new Error(`Expected actionPlan, received ${response.kind}`);
-}
-
-console.log(JSON.stringify({ ok: true, kind: response.kind, steps: response.steps.length }, null, 2));
+console.log(JSON.stringify({ ok: true, kind: response.kind }, null, 2));

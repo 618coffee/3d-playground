@@ -107,7 +107,7 @@ User prompt:
 把当前对象绕 Z 轴旋转 30 度
 ```
 
-In default `AGENT_MODE=mock`, `createMockAgentResponse()` reads the prompt and the current selection, then returns an action draft like this:
+The backend sends the model the user text, validated scene metadata, and schema descriptions. For this prompt, it expects an action draft like this:
 
 ```json
 {
@@ -138,7 +138,7 @@ In default `AGENT_MODE=mock`, `createMockAgentResponse()` reads the prompt and t
 }
 ```
 
-In `AGENT_MODE=llm`, the backend sends the model the same user text, validated scene metadata, and schema descriptions. The backend still expects this `AgentResponse` shape and re-validates it before returning it to the browser.
+The backend re-validates the returned `AgentResponse` before returning it to the browser.
 
 When the user clicks `确认执行`, `AgentPanel` calls `onExecute(action)`. `OperationExecutor` resolves `{ "source": "selection" }` to `["fan-stage"]`, checks visibility and lock state, then calls `runtime.rotateMesh("fan-stage", "z", 30)`.
 
@@ -188,7 +188,7 @@ User prompt:
 
 This is a viewer-safe visual clipping request, not a true geometry boolean operation. The requested plane is `X=0`, so the plane origin is `[0, 0, 0]` and the normal is `[1, 0, 0]`. `右半边` maps to `keepSide: "positive"` for the X axis.
 
-In default `AGENT_MODE=mock`, `createMockAgentResponse()` returns a preview-mode clip draft:
+For this prompt, the LLM provider should return a viewer-safe clip draft:
 
 ```json
 {
@@ -219,7 +219,7 @@ In default `AGENT_MODE=mock`, `createMockAgentResponse()` returns a preview-mode
 }
 ```
 
-In `AGENT_MODE=llm`, the system prompt asks the model to use `mode: "applyVisualClip"` for simple plane-cut drafts. If the model instead returns a clarification or `geometryCut` job draft for this reversible request, backend validation can normalize it into a viewer-safe `clipMesh` action draft.
+The system prompt asks the model to use `mode: "applyVisualClip"` for simple plane-cut drafts. If the model instead returns a clarification or `geometryCut` job draft for this reversible request, backend validation can normalize it into a viewer-safe `clipMesh` action draft.
 
 When the draft appears, `AgentPanel` calls `onPreviewDraft(action)`. For clip commands, `App.previewDraft()` immediately routes the command into `OperationExecutor` so the viewport can show the clipping plane before the user confirms.
 
@@ -251,7 +251,7 @@ VtkRuntime.previewClip("fan-stage", {
 
 At preview time, `HistoryStore` is not updated. `pendingCommand` is set so the AI panel can show `确认应用` / discard behavior.
 
-When the user confirms, `App.confirmPending()` calls `execute({ ...pendingCommand, confirmed: true })`. For a mock preview-mode command, the confirmed command still has `mode: "preview"`, so the current executor returns another preview result rather than committing scene `clipping` metadata. For LLM-style `mode: "applyVisualClip"`, confirmation applies the visual clip to `SceneState` and records history.
+When the user confirms, `App.confirmPending()` calls `execute({ ...pendingCommand, confirmed: true })`. For LLM-style `mode: "applyVisualClip"`, confirmation applies the visual clip to `SceneState` and records history.
 
 The applied LLM-style command looks like this:
 

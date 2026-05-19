@@ -2,14 +2,13 @@ const DEFAULT_CORS_ORIGINS = ['http://127.0.0.1:5173', 'http://localhost:5173'];
 
 export function readConfig(env = process.env) {
   const port = parsePort(env.PORT ?? env.AGENT_API_PORT, 8787);
-  const agentMode = env.AGENT_MODE === 'llm' ? 'llm' : 'mock';
   const baseUrl = stripTrailingSlash(env.LLM_BASE_URL || 'https://api.openai.com/v1');
   const provider = env.LLM_PROVIDER || inferProvider(baseUrl);
 
   return {
     host: env.HOST || '0.0.0.0',
     port,
-    agentMode,
+    agentMode: 'llm',
     corsOrigins: parseCsv(env.CORS_ORIGINS ?? env.CORS_ORIGIN, DEFAULT_CORS_ORIGINS),
     llm: {
       provider,

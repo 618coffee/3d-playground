@@ -4,11 +4,11 @@
 
 Current implementation as of 2026-05-15.
 
-This document describes what the code actually does today: how natural language reaches the local agent API, how LLM/mock responses are constrained, how commands become reviewed viewer operations, and how those operations touch vtk.js objects.
+This document describes what the code actually does today: how natural language reaches the local agent API, how LLM responses are constrained, how commands become reviewed viewer operations, and how those operations touch vtk.js objects.
 
 ## Scope
 
-The system is a controlled operation planner, not an autonomous CAD executor. The LLM or mock agent proposes structured drafts. Browser-side domain code validates, previews, confirms, executes, and records viewer-safe operations. Heavy geometry or simulation work is represented as future backend job drafts only.
+The system is a controlled operation planner, not an autonomous CAD executor. The LLM proposes structured drafts. Browser-side domain code validates, previews, confirms, executes, and records viewer-safe operations. Heavy geometry or simulation work is represented as future backend job drafts only.
 
 ## End-To-End Flow
 
@@ -17,7 +17,7 @@ User prompt in AgentPanel
   -> buildAgentContext(scene, recent history)
   -> LlmAgentClient POST /api/agent/respond
   -> local agent-api validates AgentRequest
-  -> mock agent or LLM provider returns raw AgentResponse
+  -> LLM provider returns raw AgentResponse
   -> agent-api normalizes and validates AgentResponse
   -> frontend validates AgentResponse again
   -> AgentPanel shows review card / plan / answer / job draft
@@ -52,9 +52,9 @@ There is a `RuleParserAdapter`, but the current default app path always has an e
 The local backend lives under `backend/agent-api`. It exposes:
 
 - `GET /health`: returns `{ ok: true, mode }`.
-- `POST /api/agent/respond`: validates the request, calls mock or LLM mode, validates the response, and returns JSON.
+- `POST /api/agent/respond`: validates the request, calls the configured LLM provider, validates the response, and returns JSON.
 
-`AGENT_MODE=mock` is the default and needs no credentials. `AGENT_MODE=llm` calls `callLlmProvider()` and requires `LLM_API_KEY` or `LLM_ACCESS_TOKEN`.
+The backend no longer includes a mock provider mode. `callLlmProvider()` requires `LLM_API_KEY` or `LLM_ACCESS_TOKEN`.
 
 Provider selection is explicit through `LLM_PROVIDER` or inferred from `LLM_BASE_URL`:
 

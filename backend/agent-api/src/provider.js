@@ -4,7 +4,7 @@ import { AGENT_RESPONSE_SCHEMA, OPERATION_COMMAND_SCHEMA, ACTION_RISK_SCHEMA } f
 
 export async function callLlmProvider(request, config) {
   if (!config.llm.apiKey && !config.llm.accessToken) {
-    throw new HttpError(500, 'missing_llm_credentials', 'LLM_API_KEY or LLM_ACCESS_TOKEN is required when AGENT_MODE=llm.');
+    throw new HttpError(500, 'missing_llm_credentials', 'LLM_API_KEY or LLM_ACCESS_TOKEN is required for the agent API.');
   }
 
   try {

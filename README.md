@@ -6,18 +6,19 @@
 
 ```bash
 npm install
+cp .env.example .env
+# 编辑 .env，填入 LLM_BASE_URL / LLM_MODEL / LLM_API_KEY 或 LLM_ACCESS_TOKEN
 docker compose up --build -d agent-api
 npm run dev
 ```
 
 打开：`http://127.0.0.1:5173/`
 
-`npm run dev` 默认通过 Vite proxy 把 `/api/agent/respond` 转发到本机 Docker 后端 `http://127.0.0.1:8787`。当前默认前端会调用这个本地 agent API；如果后端没有启动，AI 面板会显示请求错误。规则解析器仍作为离线 adapter 保留在代码中，主要用于开发和测试路径。
+`npm run dev` 默认通过 Vite proxy 把 `/api/agent/respond` 转发到本机 Docker 后端 `http://127.0.0.1:8787`。当前默认前端会调用这个本地 agent API；如果后端没有启动或没有配置 LLM 凭据，AI 面板会显示请求错误。规则解析器仍作为前端离线 adapter 保留在代码中，主要用于开发和测试路径；后端不再提供 mock provider。
 
-如需接入 Azure AI Foundry / AI Services，把 `.env.example` 复制为 `.env` 后设置：
+如需接入 Azure AI Foundry / AI Services，在 `.env` 中设置：
 
 ```bash
-AGENT_MODE=llm
 LLM_PROVIDER=azure-ai-inference
 LLM_BASE_URL=https://<resource-name>.cognitiveservices.azure.com
 LLM_MODEL=<deployment-name>
@@ -66,7 +67,7 @@ npm run smoke:browser
 - 键盘操作支持 `Cmd/Ctrl+C` 复制选中对象引用、`Cmd/Ctrl+V` 按默认偏移复制对象、`Delete/Backspace` 删除选中对象、`Cmd/Ctrl+Z` 撤销、`Cmd/Ctrl+Shift+Z` 或 `Cmd/Ctrl+Y` 重做。
 - AI 助手支持 Ask / Edit / Agent 模式、历史会话、新建/删除会话、请求取消、选中对象上下文 chip、粘贴对象引用为 `@mention`、结构化 JSON 调试，以及基于当前选择和历史的上下文请求。
 - AI 操作通过本地 `agent-api` 生成白名单 `AgentResponse` / `OperationCommand` 草稿，再由同一个 `OperationExecutor` 校验、预览、确认和执行；响应类型覆盖澄清、场景问答、单步操作草稿、多步操作计划、宏草稿和后端作业草稿。
-- LLM 后端：`AGENT_MODE=mock` 默认不需要凭据；`AGENT_MODE=llm` 可接 OpenAI-compatible、Azure OpenAI 或 Azure AI Inference / AI Services endpoint。
+- LLM 后端：本地 `agent-api` 直接调用 OpenAI-compatible、Azure OpenAI 或 Azure AI Inference / AI Services endpoint，需要配置 `LLM_API_KEY` 或 `LLM_ACCESS_TOKEN`。
 - 后端作业边界：真实几何切割、网格划分、求解器和结果摘要目前只生成 `backendJobDraft` 草稿，不会启动 worker 或修改三维场景。
 
 ## 可演示的 AI 命令
@@ -121,7 +122,7 @@ GitHub README 不会在页面内直接播放仓库里的 `.mp4` 相对链接，�
 React Workbench UI
   -> AgentPanel / LlmAgentClient
   -> Local agent-api (/api/agent/respond)
-  -> Mock or LLM provider
+  -> LLM provider
   -> validated AgentResponse / OperationCommand draft
   -> OperationExecutor
   -> SceneState / HistoryStore
@@ -137,7 +138,7 @@ React Workbench UI
 - `src/domain/executor.ts`：手动 UI 和 AI 命令共用的执行器。
 - `src/agent/context.ts`：发送给 agent 的紧凑场景上下文，避免传递原始几何数据。
 - `src/agent/adapters.ts`：前端 agent adapter，包括本地 API client 和离线规则解析器 adapter。
-- `backend/agent-api/src/`：本地 agent API、mock agent、LLM provider client、schema 和服务端校验/归一化。
+- `backend/agent-api/src/`：本地 agent API、LLM provider client、schema 和服务端校验/归一化。
 - `src/components/`：工作台 UI 组件。
 - `scripts/smoke-browser.mjs`：用本机 Chrome DevTools 协议验证默认浏览器演示路径。
 
